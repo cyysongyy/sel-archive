@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>SEL 會議資料庫</title>
+<title>會議資料庫</title>
 <style>
 :root{--pri:#4f46e5;--pril:#e0e7ff;--prid:#3730a3;--ok:#10b981;--warn:#f59e0b;--err:#ef4444;--g50:#f9fafb;--g100:#f3f4f6;--g200:#e5e7eb;--g400:#9ca3af;--g600:#4b5563;--g700:#374151;--g900:#111827}
 *{box-sizing:border-box}body{margin:0;font-family:-apple-system,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;background:var(--g50);color:var(--g900);line-height:1.6}
@@ -46,7 +46,7 @@ footer{text-align:center;color:var(--g400);font-size:.78rem;padding:30px 0}
 </head>
 <body>
 <header><div class="wrap">
-  <h1 id="siteTitle">SEL 會議資料庫</h1><p id="siteSub"></p>
+  <h1 id="siteTitle">會議資料庫</h1><p id="siteSub"></p>
   <nav><button id="nb" class="on" onclick="show('browse')">📚 瀏覽</button><button id="na" onclick="show('admin')">➕ 新增資料</button></nav>
 </div></header>
 
@@ -61,18 +61,23 @@ footer{text-align:center;color:var(--g400);font-size:.78rem;padding:30px 0}
 </div>
 
 <div class="wrap" id="admin" style="display:none">
-  <div class="hint"><b>每週三步驟：</b>① 把 PPT 命名為 <code>日期-類別.pptx</code>（例 <code>2026-11-23-sel.pptx</code>）放進 <code>files/</code> 資料夾 → ② 在下方填寫資料，按「加入清單」→ ③ 下載新的 <code>index.json</code>，覆蓋 <code>data/index.json</code>，上傳 GitHub 即可。</div>
   <div class="panel">
     <div class="row">
-      <div><label>日期</label><input type="date" id="fDate" oninput="autoName()"></div>
-      <div><label>類別</label><select id="fCol" onchange="autoName()"></select></div>
+      <div><label>日期</label><input type="date" id="fDate"></div>
+      <div><label>類別</label><select id="fCol"></select></div>
     </div>
     <label>標題</label><input id="fTitle" placeholder="例：SEL 週會：同理心與班級經營">
-    <label>摘要（選填）</label><textarea id="fSum" rows="3" placeholder="本次會議重點、決議事項…"></textarea>
-    <label>標籤（用逗號分隔，選填）</label><input id="fTags" placeholder="情緒覺察, 家長溝通">
-    <label>PPT 檔案路徑</label><input id="fFile" placeholder="files/2026-11-23-sel.pptx">
-    <label>錄音／其他連結（選填）</label><input id="fAudio" placeholder="https://…">
-    <div class="acts" style="margin-top:14px"><button class="btn" onclick="addItem()">加入清單</button><button class="btn o" onclick="download()">⬇ 下載 index.json</button></div>
+    <label>選擇檔案（PPT／PDF，可從電腦、手機或雲端硬碟選取）</label>
+    <input type="file" id="fFile" accept=".ppt,.pptx,.pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint,application/pdf">
+    <div class="acts" style="margin-top:14px"><button class="btn" id="upBtn" onclick="upload()">⬆ 上傳到網站</button></div>
+    <div id="upStat" class="stat" style="font-size:.88rem;margin-top:10px"></div>
+  </div>
+  <div class="panel">
+    <b>GitHub 授權（只需設定一次）</b>
+    <div class="hint">到 GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token。Repository access 只選 <code>sel-archive</code>，Permissions → Contents 選 <b>Read and write</b>。複製 token 貼在下方。token 只存在這台裝置的瀏覽器。</div>
+    <label>Repository</label><input id="gRepo" value="cyysongyy/sel-archive">
+    <label>Token</label><input id="gTok" type="password" placeholder="github_pat_…">
+    <div class="acts" style="margin-top:10px"><button class="btn g" onclick="saveTok()">儲存授權</button><button class="btn r" onclick="clearTok()">清除</button></div>
   </div>
   <div class="panel"><b>目前清單（<span id="cnt"></span> 筆）</b><div id="adminList" style="margin-top:8px"></div></div>
   <div class="panel"><b>新增類別</b><div class="row"><div><label>類別名稱</label><input id="cName" placeholder="例：家長座談會"></div><div><label>代碼（英文）</label><input id="cId" placeholder="parent"></div></div><div class="acts" style="margin-top:10px"><button class="btn g" onclick="addCol()">新增類別</button></div></div>
@@ -83,10 +88,10 @@ footer{text-align:center;color:var(--g400);font-size:.78rem;padding:30px 0}
   <iframe id="mFrame" allowfullscreen></iframe>
   <div class="note">線上預覽使用 Microsoft Office 檢視器，需檔案已公開上傳至網路；若無法顯示請直接下載。</div>
 </div></div>
-<footer>SEL 會議資料庫・可擴充至各類會議與研習資料</footer>
+<footer>會議資料庫・可擴充至各類會議與研習資料</footer>
 
 <script>
-const FALLBACK={siteTitle:"SEL 會議資料庫",siteSubtitle:"尚未載入資料",collections:[{id:"sel",name:"SEL 週會",color:"#4f46e5"}],items:[]};
+const FALLBACK={siteTitle:"會議資料庫",siteSubtitle:"尚未載入資料",collections:[{id:"sel",name:"SEL 週會",color:"#4f46e5"}],items:[]};
 let DB=FALLBACK, colF="all", yearF="all";
 const $=id=>document.getElementById(id);
 const colOf=id=>DB.collections.find(c=>c.id===id)||{name:id,color:"#9ca3af"};
@@ -98,7 +103,7 @@ async function load(){
   $("siteTitle").textContent=DB.siteTitle;$("siteSub").textContent=DB.siteSubtitle||"";document.title=DB.siteTitle;
   fillCols();render();renderAdmin();
   // 預設日期：最近的週一
-  const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));$("fDate").valueAsDate=d;autoName();
+  const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));$("fDate").valueAsDate=d;$("gRepo").value=REPO();
 }
 function fillCols(){
   $("fCol").innerHTML=DB.collections.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
@@ -133,28 +138,68 @@ function preview(id){
 }
 function closeM(){$("modal").style.display="none";$("mFrame").src="about:blank"}
 /* ---- 管理 ---- */
-function autoName(){const d=$("fDate").value,c=$("fCol").value;if(d)$("fFile").value=`files/${d}-${c}.pptx`}
-function addItem(){
-  const date=$("fDate").value,col=$("fCol").value,title=$("fTitle").value.trim(),file=$("fFile").value.trim();
-  if(!date||!title||!file){alert("請填寫日期、標題與檔案路徑");return}
-  let id=`${date}-${col}`;if(DB.items.some(i=>i.id===id))id+="-"+Date.now().toString(36).slice(-3);
-  DB.items.push({id,date,collection:col,title,summary:$("fSum").value.trim(),tags:$("fTags").value.split(/[,，、]/).map(s=>s.trim()).filter(Boolean),file,audio:$("fAudio").value.trim()});
-  save();["fTitle","fSum","fTags","fAudio"].forEach(k=>$(k).value="");autoName();render();renderAdmin();alert("已加入。記得按「下載 index.json」並覆蓋到網站。");
+const TOK=()=>localStorage.getItem("ghTok")||"",REPO=()=>localStorage.getItem("ghRepo")||"cyysongyy/sel-archive";
+function saveTok(){const t=$("gTok").value.trim();if(!t){alert("請貼上 token");return}localStorage.setItem("ghTok",t);localStorage.setItem("ghRepo",$("gRepo").value.trim()||"cyysongyy/sel-archive");$("gTok").value="";alert("已儲存授權");}
+function clearTok(){localStorage.removeItem("ghTok");alert("已清除")}
+async function gh(path,opt={}){
+  const r=await fetch(`https://api.github.com/repos/${REPO()}/${path}`,{...opt,headers:{Authorization:"Bearer "+TOK(),Accept:"application/vnd.github+json","Content-Type":"application/json"}});
+  if(!r.ok&&!(opt.allow404&&r.status==404)){let m="";try{m=(await r.json()).message}catch(e){}throw new Error(r.status+" "+m)}
+  return r;
 }
-function addCol(){
+const readB64=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(",")[1]);r.onerror=no;r.readAsDataURL(f)});
+const st=(m,c)=>{$("upStat").style.color=c||"var(--g600)";$("upStat").textContent=m};
+async function upload(){
+  const date=$("fDate").value,col=$("fCol").value,title=$("fTitle").value.trim(),f=$("fFile").files[0];
+  if(!date||!title||!f){alert("請填寫日期、標題並選擇檔案");return}
+  if(!TOK()){alert("請先在下方設定 GitHub 授權");return}
+  const ext=(f.name.split(".").pop()||"pptx").toLowerCase();
+  $("upBtn").disabled=true;
+  try{
+    let fname=`${date}-${col}.${ext}`;
+    st("檢查檔名…");
+    const ex=await gh("contents/files/"+fname,{allow404:true});
+    if(ex.status!=404)fname=`${date}-${col}-${Date.now().toString(36).slice(-3)}.${ext}`;
+    st("上傳檔案中…（"+(f.size/1048576).toFixed(1)+" MB）");
+    await gh("contents/files/"+fname,{method:"PUT",body:JSON.stringify({message:"add "+fname,content:await readB64(f)})});
+    st("更新清單中…");
+    const jr=await (await gh("contents/data/index.json?t="+Date.now())).json();
+    const db=JSON.parse(decodeURIComponent(escape(atob(jr.content.replace(/\n/g,"")))));
+    let id=`${date}-${col}`;if(db.items.some(i=>i.id===id))id+="-"+Date.now().toString(36).slice(-3);
+    db.items.push({id,date,collection:col,title,file:"files/"+fname});
+    await gh("contents/data/index.json",{method:"PUT",body:JSON.stringify({message:"add item "+id,sha:jr.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))))})});
+    DB=db;render();renderAdmin();fillCols();
+    $("fTitle").value="";$("fFile").value="";
+    st("✅ 上傳完成！網站約 1–2 分鐘後更新（可按 Ctrl+F5 重新整理）。","var(--ok)");
+  }catch(e){st("❌ 失敗："+e.message+"（請檢查授權 token 與權限）","var(--err)")}
+  $("upBtn").disabled=false;
+}
+async function addCol(){
   const n=$("cName").value.trim(),id=$("cId").value.trim().toLowerCase().replace(/[^a-z0-9-]/g,"");
   if(!n||!id||DB.collections.some(c=>c.id===id)){alert("請輸入名稱與不重複的英文代碼");return}
-  const pal=["#4f46e5","#0ea5e9","#10b981","#f59e0b","#ec4899","#8b5cf6","#14b8a6"];
-  DB.collections.push({id,name:n,color:pal[DB.collections.length%pal.length]});save();fillCols();render();$("cName").value=$("cId").value="";
+  if(!TOK()){alert("請先在下方設定 GitHub 授權");return}
+  try{
+    const jr=await (await gh("contents/data/index.json?t="+Date.now())).json();
+    const db=JSON.parse(decodeURIComponent(escape(atob(jr.content.replace(/\n/g,"")))));
+    const pal=["#4f46e5","#0ea5e9","#10b981","#f59e0b","#ec4899","#8b5cf6","#14b8a6"];
+    db.collections.push({id,name:n,color:pal[db.collections.length%pal.length]});
+    await gh("contents/data/index.json",{method:"PUT",body:JSON.stringify({message:"add collection "+id,sha:jr.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))))})});
+    DB=db;fillCols();render();$("cName").value=$("cId").value="";
+  }catch(e){alert("失敗："+e.message)}
 }
-function delItem(id){if(!confirm("從清單移除這筆？（不會刪除檔案）"))return;DB.items=DB.items.filter(i=>i.id!==id);save();render();renderAdmin()}
+async function delItem(id){
+  if(!confirm("從清單移除這筆？（PPT 檔案本身不會被刪除）"))return;
+  if(!TOK()){alert("請先在下方設定 GitHub 授權");return}
+  try{
+    const jr=await (await gh("contents/data/index.json?t="+Date.now())).json();
+    const db=JSON.parse(decodeURIComponent(escape(atob(jr.content.replace(/\n/g,"")))));
+    db.items=db.items.filter(i=>i.id!==id);
+    await gh("contents/data/index.json",{method:"PUT",body:JSON.stringify({message:"remove "+id,sha:jr.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))))})});
+    DB=db;render();renderAdmin();
+  }catch(e){alert("失敗："+e.message)}
+}
 function renderAdmin(){
   $("cnt").textContent=DB.items.length;
   $("adminList").innerHTML=[...DB.items].sort((a,b)=>b.date.localeCompare(a.date)).map(i=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--g100);font-size:.88rem"><span>${i.date}　${esc(i.title)}</span><button class="btn r" onclick="delItem('${esc(i.id)}')">移除</button></div>`).join("")||"（空）";
-}
-function save(){localStorage.setItem("selDB",JSON.stringify(DB))}
-function download(){
-  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(DB,null,2)],{type:"application/json"}));a.download="index.json";a.click();
 }
 document.addEventListener("keydown",e=>{if(e.key=="Escape")closeM()});
 load();
