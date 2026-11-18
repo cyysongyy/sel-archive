@@ -66,7 +66,7 @@ footer{text-align:center;color:var(--g400);font-size:.78rem;padding:30px 0}
       <div><label>日期</label><input type="date" id="fDate"></div>
       <div><label>類別</label><select id="fCol" onchange="if(this.value=='__new')newCol(true)"></select></div>
     </div>
-    <label>標題</label><input id="fTitle" placeholder="例：SEL 週會：同理心與班級經營">
+    <label>標題（選填，不填則使用檔名）</label><input id="fTitle" placeholder="例：SEL 週會：同理心與班級經營">
     <label>選擇檔案（PPT／PDF，可從電腦、手機或雲端硬碟選取）</label>
     <input type="file" id="fFile" accept=".ppt,.pptx,.pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint,application/pdf">
     <div class="acts" style="margin-top:14px"><button class="btn" id="upBtn" onclick="upload()">⬆ 上傳到網站</button></div>
@@ -149,8 +149,9 @@ async function gh(path,opt={}){
 const readB64=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(",")[1]);r.onerror=no;r.readAsDataURL(f)});
 const st=(m,c)=>{$("upStat").style.color=c||"var(--g600)";$("upStat").textContent=m};
 async function upload(){
-  const date=$("fDate").value,col=$("fCol").value,title=$("fTitle").value.trim(),f=$("fFile").files[0];
-  if(!date||!title||!f){alert("請填寫日期、標題並選擇檔案");return}
+  const date=$("fDate").value,col=$("fCol").value,f=$("fFile").files[0];
+  if(!date||!f){alert("請選擇日期與檔案");return}
+  const title=$("fTitle").value.trim()||f.name.replace(/\.[^.]+$/,"");
   if(!TOK()){alert("請先在下方設定 GitHub 授權");return}
   const ext=(f.name.split(".").pop()||"pptx").toLowerCase();
   $("upBtn").disabled=true;
