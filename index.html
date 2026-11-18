@@ -178,7 +178,7 @@ function render(){
     const m=i.date.slice(0,7);if(m!==cur){cur=m;h+=`<h2 class="month">${m.slice(0,4)} 年 ${+m.slice(5)} 月 <small>${cnt[m]} 筆</small></h2>`;}
     const c=colOf(i.collection),dt=new Date(i.date+"T00:00:00"),wd="日一二三四五六"[dt.getDay()],age=(Date.now()-dt)/864e5,ext=((i.file||"").split(".").pop()||"").toUpperCase();
     h+=`<article class="card"><div class="date"><span class="mo">${+i.date.slice(5,7)} 月</span><b>${+i.date.slice(8)}</b><span class="wd">週${wd}</span></div><div class="body">
-      <div class="meta"><span class="tag col" style="background:${c.color}1f;color:${c.color}"><i class="dot"></i>${esc(c.name)}</span><span class="tag type">${esc(ext)}</span>${age>=0&&age<=7?'<span class="tag new">NEW</span>':""}${(i.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}</div>
+      <div class="meta"><span class="tag col" style="background:${c.color}1f;color:${c.color}"><i class="dot"></i>${esc(c.name)}</span><span class="tag type">${esc(ext)}</span>${i.pages?`<span class="tag type">${i.pages} 頁</span>`:""}${age>=0&&age<=7?'<span class="tag new">NEW</span>':""}${(i.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}</div>
       <h3>${esc(i.title)}</h3>
       ${i.summary?`<p>${esc(i.summary)}</p>`:""}
       <div class="acts"><button class="btn" onclick="preview('${esc(i.id)}')">${IC.eye}線上預覽</button><a class="btn o" href="${esc(i.file)}" download>${IC.dl}下載</a>${i.audio?`<a class="btn g" href="${esc(i.audio)}" target="_blank" rel="noopener">${IC.mic}錄音</a>`:""}<span class="sp"></span><button class="btn ghost" title="刪除" onclick="delItem('${esc(i.id)}')">${IC.trash}</button></div></div></article>`;
@@ -249,50 +249,126 @@ async function login(){
 function logout(){localStorage.removeItem("adminPw");show("browse")}
 let Q=[];
 const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-function detectDate(name,f){
-  const m=name.match(/(20\d{2})[-_.\/年]?(\d{1,2})[-_.\/月]?(\d{1,2})/);
-  if(m){const mo=+m[2],da=+m[3];if(mo>=1&&mo<=12&&da>=1&&da<=31)return{d:`${m[1]}-${String(mo).padStart(2,"0")}-${String(da).padStart(2,"0")}`,fromName:true}}
-  return{d:iso(new Date(f.lastModified||Date.now())),fromName:false};
+const TAGWORDS=["情緒覺察","同理心","自我覺察","自我管理","社會覺察","人際關係","負責任的決定","班級經營","親師溝通","家長","衝突","霸凌","正向管教","正念","情緒調節","傾聽","合作","韌性","校園安全","特教","輔導","評量","雙語","數位","生成式AI","冰山","溝通","尊重","感恩","目標設定","壓力","專注"];
+const SYN={"行政":["校務會議","行政會報","行政會議","處室","主任","報告事項","提案討論"],"研習":["研習","工作坊","講座","培訓","增能","分享會"],"課程":["課程","教學活動","教案","單元"],"SEL":["SEL","社會情緒","情緒學習"],"家長":["家長","親職","親師"]};
+function okDate(y,m,d){const dt=new Date(y,m-1,d);return m>=1&&m<=12&&d>=1&&d<=31&&dt.getMonth()==m-1&&Math.abs(dt-Date.now())<2*365*864e5?`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`:""}
+function findDate(s){
+  let m=s.match(/(20\d{2})\s*[\/.\-年]\s*(\d{1,2})\s*[\/.\-月]\s*(\d{1,2})/);
+  if(m){const r=okDate(+m[1],+m[2],+m[3]);if(r)return r}
+  m=s.match(/(1[01]\d)\s*年\s*(\d{1,2})\s*月\s*(\d{1,2})/);
+  if(m){const r=okDate(+m[1]+1911,+m[2],+m[3]);if(r)return r}
+  m=s.match(/(20\d{2})(\d{2})(\d{2})/);
+  if(m){const r=okDate(+m[1],+m[2],+m[3]);if(r)return r}
+  return "";
 }
-function detectCol(name){
-  const n=name.toLowerCase().replace(/\s/g,"");
-  for(const c of DB.collections){
-    const cn=c.name.toLowerCase().replace(/\s/g,"");
-    if(cn&&n.includes(cn))return c.id;
-    const w=(c.name.match(/[A-Za-z]{3,}/)||[""])[0].toLowerCase();
-    if(w&&n.includes(w))return c.id;
-  }
+function detectDate(name,f,info){
+  let d=findDate(name);if(d)return{d,sure:true,note:"",src:"檔名"};
+  d=findDate(info.text||"");if(d)return{d,sure:true,note:"",src:"簡報內容"};
+  if(info.metaDate){const md=findDate(info.metaDate.replace(/[-T].*$/,m=>m)) || (/^\d{4}-\d{2}-\d{2}/.test(info.metaDate)?info.metaDate.slice(0,10):"");if(md)return{d:md,sure:false,note:"檔名與內容都找不到日期，已用檔案建立日期，請確認",src:"檔案建立日期"}}
+  return{d:iso(new Date(f.lastModified||Date.now())),sure:false,note:"檔名與內容都找不到日期，已用檔案修改日期，請確認",src:"修改日期"};
+}
+function detectCol(name,text){
+  const n=name.toLowerCase().replace(/\s/g,""),t=((text||"")).toLowerCase().replace(/\s/g,"");
+  const kw=c=>{const nm=c.name.toLowerCase().replace(/\s/g,""),ks=new Set([nm]);
+    const w=(c.name.match(/[A-Za-z]{3,}/)||[""])[0].toLowerCase();if(w)ks.add(w);
+    for(const [g,list] of Object.entries(SYN))if(c.name.toLowerCase().includes(g.toLowerCase()))list.forEach(x=>ks.add(x.toLowerCase()));
+    return [...ks].filter(Boolean)};
+  for(const c of DB.collections){if(kw(c).some(k=>n.includes(k)))return c.id}
+  let best=null,bs=0;
+  for(const c of DB.collections){let s=0;for(const k of kw(c)){let i=-1,cnt=0;while((i=t.indexOf(k,i+1))>=0&&cnt<20)cnt++;s+=cnt}if(s>bs){bs=s;best=c.id}}
+  if(best)return best;
   const last=localStorage.getItem("lastCol");
   return DB.collections.some(c=>c.id===last)?last:DB.collections[0].id;
 }
-async function slideTitle(f){
-  if(!/\.pptx$/i.test(f.name)||typeof JSZip==="undefined")return"";
+function pickTags(text,min=2){
+  const sc=[];
+  for(const w of TAGWORDS){let c=0,i=-1;const t=w;while((i=text.indexOf(t,i+1))>=0&&c<30)c++;if(c>=min)sc.push([w,c])}
+  return sc.sort((a,b)=>b[1]-a[1]).slice(0,4).map(x=>x[0]);
+}
+let tessW=null;
+async function getOcr(){
+  if(tessW)return tessW;
+  st("首次使用需下載文字辨識模型（約 6 MB），請稍候…");
+  await new Promise((ok,no)=>{if(window.Tesseract)return ok();const s=document.createElement("script");s.src=(window.__TESS&&__TESS.script)||"https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";s.onload=ok;s.onerror=()=>no(new Error("載入失敗"));document.head.appendChild(s)});
+  tessW=await Tesseract.createWorker("chi_tra+eng",1,{langPath:new URL("lang",location.href).href.replace(/\/$/,""),gzip:true,...(window.__TESS?{workerPath:__TESS.worker,corePath:__TESS.core}:{})});
+  return tessW;
+}
+const cjkClean=s=>s.replace(/\s+([,?!.:;])/g,"$1").replace(/\s+/g," ").replace(/(?<=[　-鿿＀-￯])\s+(?=[　-鿿＀-￯])/g,"").trim();
+async function ocrPdf(doc,label,r,titles,texts){
+  const w=await getOcr(),n=Math.min(doc.numPages,4);
+  for(let p=1;p<=n;p++){
+    st(`文字辨識中：${label}（第 ${p}/${n} 頁）`);
+    const pg=await doc.getPage(p),v0=pg.getViewport({scale:1}),vp=pg.getViewport({scale:1500/v0.width});
+    const c=document.createElement("canvas");c.width=vp.width;c.height=vp.height;
+    await pg.render({canvasContext:c.getContext("2d"),viewport:vp}).promise;
+    const {data}=await w.recognize(c);
+    const lines=data.lines.map(l=>({t:cjkClean(l.text),c:l.confidence,y:l.bbox.y0})).filter(l=>l.t.length>=2);
+    const head=lines.filter(l=>l.c>=75&&l.t.length>=4&&l.y<c.height*.35).sort((a,b)=>a.y-b.y)[0];
+    titles[p-1]=head?head.t:"";
+    texts[p-1]=lines.filter(l=>l.c>=60).map(l=>l.t).join(" ");
+  }
+  r.ocr=true;
+}
+async function extractInfo(f){
+  const r={title:"",text:"",pages:0,summary:"",metaDate:"",tags:[]},titles=[],texts=[];
   try{
-    const z=await JSZip.loadAsync(f);const x=z.file("ppt/slides/slide1.xml");if(!x)return"";
-    const doc=new DOMParser().parseFromString(await x.async("string"),"application/xml");
-    const txt=sp=>[...sp.getElementsByTagName("a:t")].map(t=>t.textContent).join("").replace(/\s+/g," ").trim();
-    const sps=[...doc.getElementsByTagName("p:sp")];
-    for(const sp of sps){const ph=sp.getElementsByTagName("p:ph")[0];if(ph&&/title/i.test(ph.getAttribute("type")||"")){const t=txt(sp);if(t)return t.slice(0,80)}}
-    for(const sp of sps){const t=txt(sp);if(t)return t.slice(0,80)}
+    if(/\.pptx$/i.test(f.name)&&typeof JSZip!=="undefined"){
+      const z=await JSZip.loadAsync(f);
+      const names=Object.keys(z.files).filter(n=>/^ppt\/slides\/slide\d+\.xml$/.test(n)).sort((a,b)=>+a.match(/\d+/)[0]-+b.match(/\d+/)[0]);
+      r.pages=names.length;
+      for(const n of names.slice(0,15)){
+        const doc=new DOMParser().parseFromString(await z.file(n).async("string"),"application/xml");
+        const txt=sp=>[...sp.getElementsByTagName("a:t")].map(t=>t.textContent).join("").replace(/\s+/g," ").trim();
+        const sps=[...doc.getElementsByTagName("p:sp")];let t="";
+        for(const sp of sps){const ph=sp.getElementsByTagName("p:ph")[0];if(ph&&/title/i.test(ph.getAttribute("type")||"")){t=txt(sp);if(t)break}}
+        if(!t)for(const sp of sps){t=txt(sp);if(t)break}
+        titles.push(t);texts.push(sps.map(txt).join(" "));
+      }
+      const core=z.file("docProps/core.xml");
+      if(core){const m=(await core.async("string")).match(/<dcterms:created[^>]*>([^<]+)</);if(m)r.metaDate=m[1]}
+    }else if(/\.pdf$/i.test(f.name)){
+      const lib=await loadPdfJs(),doc=await lib.getDocument({data:new Uint8Array(await f.arrayBuffer())}).promise;
+      r.pages=doc.numPages;
+      try{const mt=await doc.getMetadata(),cd=(mt.info&&mt.info.CreationDate)||"",m=cd.match(/D:(\d{4})(\d{2})(\d{2})/);if(m)r.metaDate=`${m[1]}-${m[2]}-${m[3]}`}catch(e){}
+      for(let p=1;p<=Math.min(doc.numPages,15);p++){
+        const c=await (await doc.getPage(p)).getTextContent(),its=c.items.filter(i=>i.str&&i.str.trim());
+        if(!its.length){titles.push("");texts.push("");continue}
+        const mh=Math.max(...its.map(i=>Math.abs(i.transform[3])||0));
+        titles.push(its.filter(i=>(Math.abs(i.transform[3])||0)>=mh*.9).map(i=>i.str).join("").replace(/\s+/g," ").trim());
+        texts.push(its.map(i=>i.str).join(" "));
+      }
+      if(texts.join("").trim().length<30){try{await ocrPdf(doc,f.name,r,titles,texts)}catch(e){st("文字辨識無法使用："+e.message)}}
+    }
   }catch(e){}
-  return"";
+  const clean=s=>(s||"").replace(/\s+/g," ").trim();
+  r.title=clean(r.ocr?(titles[0]||""):(titles.find(t=>clean(t).length>=2)||"")).slice(0,80);
+  r.text=texts.join(" ");
+  const seen=new Set([r.title]),sm=[];
+  for(const t of titles.slice(1)){const c=clean(t);if(c.length>=2&&c.length<=40&&!seen.has(c)){seen.add(c);sm.push(c)}if(sm.length>=4)break}
+  r.summary=sm.join(" ・ ").slice(0,120);
+  r.tags=r.ocr?pickTags(r.text,1).slice(0,3):pickTags(r.text);
+  return r;
 }
 async function addFiles(list){
   const bad=[],arr=[...list];
-  $("fFile").value="";
+  $("fFile").value="";st("辨識檔案內容中…");
   for(const f of arr){
     if(!/\.(pptx?|pdf)$/i.test(f.name)){bad.push(f.name);continue}
-    const fname=f.name.replace(/\.[^.]+$/,""),dt=detectDate(fname,f),st0=await slideTitle(f);
-    Q.push({f,title:st0||fname,fromSlide:!!st0,date:dt.d,fromName:dt.fromName,col:detectCol(fname),status:""});
+    const fname=f.name.replace(/\.[^.]+$/,""),info=await extractInfo(f),dt=detectDate(fname,f,info);
+    const title=info.title||fname,col=detectCol(fname,title+" "+info.text);
+    const dup=DB.items.find(i=>(i.size&&i.size===f.size&&i.pages===info.pages)||(i.title===title&&i.date===dt.d));
+    const found=[info.ocr?"文字辨識(OCR)":"",info.title?"標題":"",dt.sure&&dt.src!="檔名"?"日期":"",info.summary?"摘要":"",info.tags.length?"標籤":""].filter(Boolean);
+    Q.push({f,title,date:dt.d,sure:dt.sure,dateNote:dt.note,col,summary:info.summary,tags:info.tags,pages:info.pages,dup,found:found.length?"已自動辨識："+found.join("、"):"",status:""});
   }
+  st("");
   if(bad.length)alert("不支援的檔案（只收 PPT／PDF）：\n"+bad.join("\n"));
   renderQueue();
-  if($("autoUp").checked&&Q.length&&Q.every(q=>q.fromName))uploadAll();
+  if($("autoUp").checked&&Q.length&&Q.every(q=>q.sure&&!q.dup))uploadAll();
 }
 function renderQueue(){
   const el=$("queue");if(!el)return;
   const opts=sel=>DB.collections.map(c=>`<option value="${esc(c.id)}" ${c.id==sel?"selected":""}>${esc(c.name)}</option>`).join("");
-  el.innerHTML=Q.map((q,i)=>`<div class="qrow"><div class="qt"><input value="${esc(q.title)}" onchange="Q[${i}].title=this.value.trim()||Q[${i}].title" style="font-weight:600"> <span style="color:var(--g400)">${(q.f.size/1048576).toFixed(1)} MB${q.fromSlide?"　✨ 標題取自簡報第一頁":""}</span>${q.fromName?"":'<div style="color:var(--warn);font-size:.78rem">檔名沒有日期，已用檔案修改日期，請確認</div>'}${q.status?`<div style="font-size:.78rem;color:${q.status.startsWith("❌")?"var(--err)":"var(--g600)"}">${esc(q.status)}</div>`:""}</div>
+  el.innerHTML=Q.map((q,i)=>`<div class="qrow"><div class="qt"><input value="${esc(q.title)}" onchange="Q[${i}].title=this.value.trim()||Q[${i}].title" style="font-weight:600"> <span style="color:var(--g400)">${(q.f.size/1048576).toFixed(1)} MB${q.pages?"　"+q.pages+" 頁":""}${q.found?"　✨ "+esc(q.found):""}</span>${q.sure?"":`<div style="color:var(--warn);font-size:.78rem">${esc(q.dateNote)}</div>`}${q.dup?`<div style="color:var(--err);font-size:.78rem">⚠ 可能重複：與 ${esc(q.dup.date)}「${esc(q.dup.title)}」相同，上傳前請確認</div>`:""}${q.summary?`<div style="color:var(--g600);font-size:.78rem">摘要：${esc(q.summary)}</div>`:""}${q.tags&&q.tags.length?`<div style="color:var(--g400);font-size:.78rem">${q.tags.map(t=>"#"+esc(t)).join(" ")}</div>`:""}${q.status?`<div style="font-size:.78rem;color:${q.status.startsWith("❌")?"var(--err)":"var(--g600)"}">${esc(q.status)}</div>`:""}</div>
     <input type="date" value="${q.date}" onchange="Q[${i}].date=this.value">
     <select onchange="Q[${i}].col=this.value;localStorage.setItem('lastCol',this.value)">${opts(q.col)}</select>
     <button class="btn g" onclick="Q.splice(${i},1);renderQueue()">✕</button></div>`).join("");
@@ -311,6 +387,7 @@ async function uploadAll(){
   if(!Q.length){alert("請先選擇檔案");return}
   if(!PW()&&!(await login()))return;
   if(Q.some(q=>!q.date)){alert("有檔案缺少日期");return}
+  if(Q.some(q=>q.dup)&&!confirm("有 "+Q.filter(q=>q.dup).length+" 個檔案可能與現有資料重複，仍要上傳嗎？\n（按取消後，可用 ✕ 移除重複的檔案）"))return;
   uploading=true;$("upBtn").disabled=true;
   const done=[],used=new Set(),failed=[];
   try{
@@ -325,7 +402,7 @@ async function uploadAll(){
         used.add(fname);
         q.status="上傳中…";st(`上傳 ${i+1}/${Q.length}：${q.title}`);renderQueue();
         await gh("contents/files/"+fname,{method:"PUT",body:JSON.stringify({message:"add "+fname,content:await readB64(q.f)})});
-        done.push({date:q.date,collection:q.col,title:q.title,file:"files/"+fname});
+        done.push({date:q.date,collection:q.col,title:q.title,...(q.summary?{summary:q.summary}:{}),...(q.tags&&q.tags.length?{tags:q.tags}:{}),...(q.pages?{pages:q.pages}:{}),size:q.f.size,file:"files/"+fname});
         q.status="✅ 完成";
       }catch(e){q.status="❌ "+e.message;failed.push(q)}
     }
