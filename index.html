@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <title>會議資料庫</title>
 <style>
 :root{--pri:#4f46e5;--pril:#e0e7ff;--prid:#3730a3;--ok:#10b981;--warn:#f59e0b;--err:#ef4444;--g50:#f9fafb;--g100:#f3f4f6;--g200:#e5e7eb;--g400:#9ca3af;--g600:#4b5563;--g700:#374151;--g900:#111827}
@@ -52,6 +53,7 @@ footer{text-align:center;color:var(--g400);font-size:.78rem;padding:30px 0}
 </div></header>
 
 <div class="wrap" id="browse">
+  <div id="notice"></div>
   <div class="bar">
     <input id="q" placeholder="🔍 搜尋標題、摘要、標籤…" oninput="render()">
     <div class="chips" id="colChips"></div>
@@ -107,14 +109,14 @@ function render(){
   $("colChips").innerHTML=[["all","全部"],...DB.collections.map(c=>[c.id,c.name])].map(([id,n])=>`<span class="chip ${colF==id?"on":""}" onclick="colF='${id}';render()">${esc(n)}</span>`).join("")+`<span class="chip" style="border-style:dashed;color:var(--pri)" onclick="newCol()">＋ 新增類別</span>`+(colF!="all"&&DB.collections.some(c=>c.id==colF)?`<span class="chip" style="color:var(--g600)" onclick="renameCol('${colF}')">✎ 改名「${esc(colOf(colF).name)}」</span><span class="chip" style="color:var(--err);border-color:var(--err)" onclick="delCol('${colF}')">🗑 刪除此類別</span>`:"");
   $("yearChips").innerHTML=[["all","所有年度"],...years.map(y=>[y,y+" 年"])].map(([id,n])=>`<span class="chip ${yearF==id?"on":""}" onclick="yearF='${id}';render()">${n}</span>`).join("");
   const items=DB.items.filter(i=>(colF=="all"||i.collection==colF)&&(yearF=="all"||i.date.startsWith(yearF))&&(!q||[i.title,i.summary,(i.tags||[]).join(" ")].join(" ").toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date));
-  $("stat").textContent=`共 ${items.length} 筆`;
+  $("stat").textContent=`共 ${items.length} 筆`;weeklyNotice();
   if(!items.length){$("list").innerHTML='<div class="empty">沒有符合的資料</div>';return;}
   let h="",cur="";
   for(const i of items){
     const m=i.date.slice(0,7);if(m!==cur){cur=m;h+=`<h2 class="month">${m.slice(0,4)} 年 ${+m.slice(5)} 月</h2>`;}
     const c=colOf(i.collection),dt=new Date(i.date+"T00:00:00"),wd="日一二三四五六"[dt.getDay()];
     h+=`<div class="card"><div class="date"><b>${+i.date.slice(8)}</b><span>週${wd}</span></div><div class="body">
-      <h3>${esc(i.title)}</h3><span class="tag col" style="background:${c.color}">${esc(c.name)}</span>${(i.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}
+      <h3>${esc(i.title)}${(Date.now()-new Date(i.date+"T00:00:00"))/864e5<=7&&(Date.now()-new Date(i.date+"T00:00:00"))>=0?' <span class="tag" style="background:var(--ok);color:#fff">🆕 新</span>':""}</h3><span class="tag col" style="background:${c.color}">${esc(c.name)}</span>${(i.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}
       ${i.summary?`<p>${esc(i.summary)}</p>`:""}
       <div class="acts"><button class="btn" onclick="preview('${esc(i.id)}')">👁 線上預覽</button><a class="btn o" href="${esc(i.file)}" download>⬇ 下載 PPT</a><button class="btn r" onclick="delItem('${esc(i.id)}')">🗑 刪除</button>${i.audio?`<a class="btn g" href="${esc(i.audio)}" target="_blank" rel="noopener">🎧 錄音</a>`:""}</div></div></div>`;
   }
@@ -168,14 +170,26 @@ function detectCol(name){
   const last=localStorage.getItem("lastCol");
   return DB.collections.some(c=>c.id===last)?last:DB.collections[0].id;
 }
-function addFiles(list){
-  const bad=[];
-  for(const f of list){
-    if(!/\.(pptx?|pdf)$/i.test(f.name)){bad.push(f.name);continue}
-    const title=f.name.replace(/\.[^.]+$/,""),dt=detectDate(title,f);
-    Q.push({f,title,date:dt.d,fromName:dt.fromName,col:detectCol(title),status:""});
-  }
+async function slideTitle(f){
+  if(!/\.pptx$/i.test(f.name)||typeof JSZip==="undefined")return"";
+  try{
+    const z=await JSZip.loadAsync(f);const x=z.file("ppt/slides/slide1.xml");if(!x)return"";
+    const doc=new DOMParser().parseFromString(await x.async("string"),"application/xml");
+    const txt=sp=>[...sp.getElementsByTagName("a:t")].map(t=>t.textContent).join("").replace(/\s+/g," ").trim();
+    const sps=[...doc.getElementsByTagName("p:sp")];
+    for(const sp of sps){const ph=sp.getElementsByTagName("p:ph")[0];if(ph&&/title/i.test(ph.getAttribute("type")||"")){const t=txt(sp);if(t)return t.slice(0,80)}}
+    for(const sp of sps){const t=txt(sp);if(t)return t.slice(0,80)}
+  }catch(e){}
+  return"";
+}
+async function addFiles(list){
+  const bad=[],arr=[...list];
   $("fFile").value="";
+  for(const f of arr){
+    if(!/\.(pptx?|pdf)$/i.test(f.name)){bad.push(f.name);continue}
+    const fname=f.name.replace(/\.[^.]+$/,""),dt=detectDate(fname,f),st0=await slideTitle(f);
+    Q.push({f,title:st0||fname,fromSlide:!!st0,date:dt.d,fromName:dt.fromName,col:detectCol(fname),status:""});
+  }
   if(bad.length)alert("不支援的檔案（只收 PPT／PDF）：\n"+bad.join("\n"));
   renderQueue();
   if($("autoUp").checked&&Q.length&&Q.every(q=>q.fromName))uploadAll();
@@ -183,7 +197,7 @@ function addFiles(list){
 function renderQueue(){
   const el=$("queue");if(!el)return;
   const opts=sel=>DB.collections.map(c=>`<option value="${esc(c.id)}" ${c.id==sel?"selected":""}>${esc(c.name)}</option>`).join("");
-  el.innerHTML=Q.map((q,i)=>`<div class="qrow"><div class="qt">📄 <b>${esc(q.title)}</b> <span style="color:var(--g400)">${(q.f.size/1048576).toFixed(1)} MB</span>${q.fromName?"":'<div style="color:var(--warn);font-size:.78rem">檔名沒有日期，已用檔案修改日期，請確認</div>'}${q.status?`<div style="font-size:.78rem;color:${q.status.startsWith("❌")?"var(--err)":"var(--g600)"}">${esc(q.status)}</div>`:""}</div>
+  el.innerHTML=Q.map((q,i)=>`<div class="qrow"><div class="qt"><input value="${esc(q.title)}" onchange="Q[${i}].title=this.value.trim()||Q[${i}].title" style="font-weight:600"> <span style="color:var(--g400)">${(q.f.size/1048576).toFixed(1)} MB${q.fromSlide?"　✨ 標題取自簡報第一頁":""}</span>${q.fromName?"":'<div style="color:var(--warn);font-size:.78rem">檔名沒有日期，已用檔案修改日期，請確認</div>'}${q.status?`<div style="font-size:.78rem;color:${q.status.startsWith("❌")?"var(--err)":"var(--g600)"}">${esc(q.status)}</div>`:""}</div>
     <input type="date" value="${q.date}" onchange="Q[${i}].date=this.value">
     <select onchange="Q[${i}].col=this.value;localStorage.setItem('lastCol',this.value)">${opts(q.col)}</select>
     <button class="btn g" onclick="Q.splice(${i},1);renderQueue()">✕</button></div>`).join("");
@@ -305,6 +319,24 @@ function renderAdmin(){
   $("adminList").innerHTML=[...DB.items].sort((a,b)=>b.date.localeCompare(a.date)).map(i=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--g100);font-size:.88rem"><span>${i.date}　${esc(i.title)}</span><span style="display:flex;gap:6px;flex-shrink:0"><button class="btn o" onclick="preview('${esc(i.id)}')">線上預覽</button><button class="btn r" onclick="delItem('${esc(i.id)}')">移除</button></span></div>`).join("")||"（空）";
 }
 document.addEventListener("keydown",e=>{if(e.key=="Escape")closeM()});
+function lastMonday(){
+  const n=new Date(),d=new Date(n);d.setHours(0,0,0,0);d.setDate(d.getDate()-((d.getDay()+6)%7));
+  const end=new Date(d);end.setHours(17,30,0,0);
+  if(n<end)d.setDate(d.getDate()-7);
+  return iso(d);
+}
+function weeklyNotice(){
+  const el=$("notice");if(!el)return;
+  const m=lastMonday();
+  if(!PW()||DB.items.some(i=>i.date===m)){el.innerHTML="";return}
+  el.innerHTML=`<div class="hint" style="background:#fef3c7;color:#92400e;display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px"><span>📌 ${+m.slice(5,7)}/${+m.slice(8)}（週一）的會議資料尚未上傳</span><button class="btn" onclick="show('admin')">前往上傳</button></div>`;
+}
+setInterval(async()=>{
+  if(uploading||document.hidden)return;
+  try{const r=await fetch("data/index.json?t="+Date.now());if(!r.ok)return;const n=await r.json();
+    if(JSON.stringify(n)!==JSON.stringify(DB)){DB=n;fillCols();render();renderAdmin();weeklyNotice()}}catch(e){}
+},300000);
+
 load();
 </script>
 </body>
