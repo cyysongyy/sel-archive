@@ -1,0 +1,22 @@
+{
+  "siteTitle": "SEL 會議資料庫",
+  "siteSubtitle": "北港鎮辰光國小・每週一 16:30–17:30 例行會議",
+  "collections": [
+    {"id": "sel", "name": "SEL 週會", "color": "#4f46e5"},
+    {"id": "admin", "name": "行政會議", "color": "#0ea5e9"},
+    {"id": "training", "name": "研習／講座", "color": "#10b981"},
+    {"id": "other", "name": "其他", "color": "#f59e0b"}
+  ],
+  "items": [
+    {
+      "id": "2026-11-16-sel",
+      "date": "2026-11-16",
+      "collection": "sel",
+      "title": "（範例）SEL 週會：情緒覺察與班級經營",
+      "summary": "這是一筆範例資料，請在管理頁新增真實資料後刪除。",
+      "tags": ["範例", "情緒覺察"],
+      "file": "files/2026-11-16-sel.pptx",
+      "audio": ""
+    }
+  ]
+}

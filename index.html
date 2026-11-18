@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SEL 會議資料庫</title>
+<style>
+:root{--pri:#4f46e5;--pril:#e0e7ff;--prid:#3730a3;--ok:#10b981;--warn:#f59e0b;--err:#ef4444;--g50:#f9fafb;--g100:#f3f4f6;--g200:#e5e7eb;--g400:#9ca3af;--g600:#4b5563;--g700:#374151;--g900:#111827}
+*{box-sizing:border-box}body{margin:0;font-family:-apple-system,"Noto Sans TC","PingFang TC","Microsoft JhengHei",sans-serif;background:var(--g50);color:var(--g900);line-height:1.6}
+header{background:linear-gradient(135deg,var(--pri),var(--prid));color:#fff;padding:22px 16px 18px}
+.wrap{max-width:900px;margin:0 auto;padding:0 14px}
+header h1{margin:0;font-size:1.5rem}header p{margin:4px 0 0;opacity:.85;font-size:.9rem}
+nav{display:flex;gap:8px;margin-top:14px}
+nav button{background:rgba(255,255,255,.15);color:#fff;border:0;padding:7px 16px;border-radius:20px;cursor:pointer;font-size:.9rem}
+nav button.on{background:#fff;color:var(--prid);font-weight:700}
+.bar{position:sticky;top:0;background:var(--g50);padding:12px 0 8px;z-index:5;border-bottom:1px solid var(--g200)}
+input,select,textarea{width:100%;padding:9px 12px;border:1px solid var(--g200);border-radius:10px;font:inherit;background:#fff}
+.chips{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+.chip{padding:4px 13px;border-radius:16px;border:1px solid var(--g200);background:#fff;cursor:pointer;font-size:.85rem;color:var(--g600)}
+.chip.on{background:var(--pri);color:#fff;border-color:var(--pri)}
+.stat{font-size:.8rem;color:var(--g400);margin:6px 0 0}
+h2.month{font-size:1rem;color:var(--prid);margin:22px 0 8px;padding-left:8px;border-left:4px solid var(--pri)}
+.card{background:#fff;border:1px solid var(--g200);border-radius:14px;padding:14px 16px;margin-bottom:10px;display:flex;gap:14px;align-items:flex-start}
+.date{min-width:56px;text-align:center;background:var(--pril);border-radius:10px;padding:6px 4px;color:var(--prid)}
+.date b{display:block;font-size:1.3rem;line-height:1.1}.date span{font-size:.72rem}
+.body{flex:1;min-width:0}.body h3{margin:0 0 3px;font-size:1.02rem}
+.body p{margin:2px 0 6px;font-size:.88rem;color:var(--g600)}
+.tag{display:inline-block;font-size:.72rem;padding:1px 9px;border-radius:10px;background:var(--g100);color:var(--g600);margin:0 4px 4px 0}
+.col{color:#fff!important}
+.acts{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+.btn{border:0;border-radius:8px;padding:6px 13px;font-size:.84rem;cursor:pointer;text-decoration:none;display:inline-block;background:var(--pri);color:#fff}
+.btn.o{background:#fff;color:var(--pri);border:1px solid var(--pri)}.btn.g{background:var(--g100);color:var(--g700)}.btn.r{background:#fff;color:var(--err);border:1px solid var(--err)}
+.empty{text-align:center;color:var(--g400);padding:50px 0}
+#modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:20;padding:10px}
+#modal .box{background:#fff;border-radius:14px;height:100%;max-width:1100px;margin:0 auto;display:flex;flex-direction:column;overflow:hidden}
+#modal .hd{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;border-bottom:1px solid var(--g200);gap:8px}
+#modal iframe{flex:1;border:0;width:100%}
+.note{font-size:.8rem;color:var(--g400);padding:8px 14px}
+label{display:block;font-size:.85rem;font-weight:600;margin:12px 0 4px;color:var(--g700)}
+.panel{background:#fff;border:1px solid var(--g200);border-radius:14px;padding:16px;margin:16px 0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:560px){.row{grid-template-columns:1fr}.card{flex-direction:column;gap:8px}}
+pre{background:var(--g900);color:#d1fae5;padding:12px;border-radius:10px;overflow:auto;font-size:.8rem;max-height:240px}
+.hint{font-size:.82rem;color:var(--g600);background:var(--pril);padding:10px 12px;border-radius:10px;margin:10px 0}
+footer{text-align:center;color:var(--g400);font-size:.78rem;padding:30px 0}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+  <h1 id="siteTitle">SEL 會議資料庫</h1><p id="siteSub"></p>
+  <nav><button id="nb" class="on" onclick="show('browse')">📚 瀏覽</button><button id="na" onclick="show('admin')">➕ 新增資料</button></nav>
+</div></header>
+
+<div class="wrap" id="browse">
+  <div class="bar">
+    <input id="q" placeholder="🔍 搜尋標題、摘要、標籤…" oninput="render()">
+    <div class="chips" id="colChips"></div>
+    <div class="chips" id="yearChips"></div>
+    <div class="stat" id="stat"></div>
+  </div>
+  <div id="list"></div>
+</div>
+
+<div class="wrap" id="admin" style="display:none">
+  <div class="hint"><b>每週三步驟：</b>① 把 PPT 命名為 <code>日期-類別.pptx</code>（例 <code>2026-11-23-sel.pptx</code>）放進 <code>files/</code> 資料夾 → ② 在下方填寫資料，按「加入清單」→ ③ 下載新的 <code>index.json</code>，覆蓋 <code>data/index.json</code>，上傳 GitHub 即可。</div>
+  <div class="panel">
+    <div class="row">
+      <div><label>日期</label><input type="date" id="fDate" oninput="autoName()"></div>
+      <div><label>類別</label><select id="fCol" onchange="autoName()"></select></div>
+    </div>
+    <label>標題</label><input id="fTitle" placeholder="例：SEL 週會：同理心與班級經營">
+    <label>摘要（選填）</label><textarea id="fSum" rows="3" placeholder="本次會議重點、決議事項…"></textarea>
+    <label>標籤（用逗號分隔，選填）</label><input id="fTags" placeholder="情緒覺察, 家長溝通">
+    <label>PPT 檔案路徑</label><input id="fFile" placeholder="files/2026-11-23-sel.pptx">
+    <label>錄音／其他連結（選填）</label><input id="fAudio" placeholder="https://…">
+    <div class="acts" style="margin-top:14px"><button class="btn" onclick="addItem()">加入清單</button><button class="btn o" onclick="download()">⬇ 下載 index.json</button></div>
+  </div>
+  <div class="panel"><b>目前清單（<span id="cnt"></span> 筆）</b><div id="adminList" style="margin-top:8px"></div></div>
+  <div class="panel"><b>新增類別</b><div class="row"><div><label>類別名稱</label><input id="cName" placeholder="例：家長座談會"></div><div><label>代碼（英文）</label><input id="cId" placeholder="parent"></div></div><div class="acts" style="margin-top:10px"><button class="btn g" onclick="addCol()">新增類別</button></div></div>
+</div>
+
+<div id="modal"><div class="box">
+  <div class="hd"><b id="mTitle" style="font-size:.95rem"></b><div class="acts" style="margin:0"><a class="btn o" id="mDl" download>⬇ 下載</a><button class="btn g" onclick="closeM()">✕ 關閉</button></div></div>
+  <iframe id="mFrame" allowfullscreen></iframe>
+  <div class="note">線上預覽使用 Microsoft Office 檢視器，需檔案已公開上傳至網路；若無法顯示請直接下載。</div>
+</div></div>
+<footer>SEL 會議資料庫・可擴充至各類會議與研習資料</footer>
+
+<script>
+const FALLBACK={siteTitle:"SEL 會議資料庫",siteSubtitle:"尚未載入資料",collections:[{id:"sel",name:"SEL 週會",color:"#4f46e5"}],items:[]};
+let DB=FALLBACK, colF="all", yearF="all";
+const $=id=>document.getElementById(id);
+const colOf=id=>DB.collections.find(c=>c.id===id)||{name:id,color:"#9ca3af"};
+const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
+
+async function load(){
+  try{const r=await fetch("data/index.json?t="+Date.now());if(!r.ok)throw 0;DB=await r.json();}
+  catch(e){DB=JSON.parse(localStorage.getItem("selDB")||"null")||FALLBACK;}
+  $("siteTitle").textContent=DB.siteTitle;$("siteSub").textContent=DB.siteSubtitle||"";document.title=DB.siteTitle;
+  fillCols();render();renderAdmin();
+  // 預設日期：最近的週一
+  const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));$("fDate").valueAsDate=d;autoName();
+}
+function fillCols(){
+  $("fCol").innerHTML=DB.collections.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
+}
+function show(v){$("browse").style.display=v=="browse"?"":"none";$("admin").style.display=v=="admin"?"":"none";$("nb").className=v=="browse"?"on":"";$("na").className=v=="admin"?"on":"";}
+function render(){
+  const q=$("q").value.trim().toLowerCase();
+  const years=[...new Set(DB.items.map(i=>i.date.slice(0,4)))].sort().reverse();
+  $("colChips").innerHTML=[["all","全部"],...DB.collections.map(c=>[c.id,c.name])].map(([id,n])=>`<span class="chip ${colF==id?"on":""}" onclick="colF='${id}';render()">${esc(n)}</span>`).join("");
+  $("yearChips").innerHTML=[["all","所有年度"],...years.map(y=>[y,y+" 年"])].map(([id,n])=>`<span class="chip ${yearF==id?"on":""}" onclick="yearF='${id}';render()">${n}</span>`).join("");
+  const items=DB.items.filter(i=>(colF=="all"||i.collection==colF)&&(yearF=="all"||i.date.startsWith(yearF))&&(!q||[i.title,i.summary,(i.tags||[]).join(" ")].join(" ").toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date));
+  $("stat").textContent=`共 ${items.length} 筆`;
+  if(!items.length){$("list").innerHTML='<div class="empty">沒有符合的資料</div>';return;}
+  let h="",cur="";
+  for(const i of items){
+    const m=i.date.slice(0,7);if(m!==cur){cur=m;h+=`<h2 class="month">${m.slice(0,4)} 年 ${+m.slice(5)} 月</h2>`;}
+    const c=colOf(i.collection),dt=new Date(i.date+"T00:00:00"),wd="日一二三四五六"[dt.getDay()];
+    h+=`<div class="card"><div class="date"><b>${+i.date.slice(8)}</b><span>週${wd}</span></div><div class="body">
+      <h3>${esc(i.title)}</h3><span class="tag col" style="background:${c.color}">${esc(c.name)}</span>${(i.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}
+      ${i.summary?`<p>${esc(i.summary)}</p>`:""}
+      <div class="acts"><button class="btn" onclick="preview('${esc(i.id)}')">👁 線上預覽</button><a class="btn o" href="${esc(i.file)}" download>⬇ 下載 PPT</a>${i.audio?`<a class="btn g" href="${esc(i.audio)}" target="_blank" rel="noopener">🎧 錄音</a>`:""}</div></div></div>`;
+  }
+  $("list").innerHTML=h;
+}
+function absUrl(p){return new URL(p,location.href).href}
+function preview(id){
+  const i=DB.items.find(x=>x.id===id);if(!i)return;
+  const u=absUrl(i.file);
+  $("mTitle").textContent=i.date+"　"+i.title;$("mDl").href=i.file;
+  $("mFrame").src=/\.pdf$/i.test(i.file)?i.file:"https://view.officeapps.live.com/op/embed.aspx?src="+encodeURIComponent(u);
+  $("modal").style.display="block";
+}
+function closeM(){$("modal").style.display="none";$("mFrame").src="about:blank"}
+/* ---- 管理 ---- */
+function autoName(){const d=$("fDate").value,c=$("fCol").value;if(d)$("fFile").value=`files/${d}-${c}.pptx`}
+function addItem(){
+  const date=$("fDate").value,col=$("fCol").value,title=$("fTitle").value.trim(),file=$("fFile").value.trim();
+  if(!date||!title||!file){alert("請填寫日期、標題與檔案路徑");return}
+  let id=`${date}-${col}`;if(DB.items.some(i=>i.id===id))id+="-"+Date.now().toString(36).slice(-3);
+  DB.items.push({id,date,collection:col,title,summary:$("fSum").value.trim(),tags:$("fTags").value.split(/[,，、]/).map(s=>s.trim()).filter(Boolean),file,audio:$("fAudio").value.trim()});
+  save();["fTitle","fSum","fTags","fAudio"].forEach(k=>$(k).value="");autoName();render();renderAdmin();alert("已加入。記得按「下載 index.json」並覆蓋到網站。");
+}
+function addCol(){
+  const n=$("cName").value.trim(),id=$("cId").value.trim().toLowerCase().replace(/[^a-z0-9-]/g,"");
+  if(!n||!id||DB.collections.some(c=>c.id===id)){alert("請輸入名稱與不重複的英文代碼");return}
+  const pal=["#4f46e5","#0ea5e9","#10b981","#f59e0b","#ec4899","#8b5cf6","#14b8a6"];
+  DB.collections.push({id,name:n,color:pal[DB.collections.length%pal.length]});save();fillCols();render();$("cName").value=$("cId").value="";
+}
+function delItem(id){if(!confirm("從清單移除這筆？（不會刪除檔案）"))return;DB.items=DB.items.filter(i=>i.id!==id);save();render();renderAdmin()}
+function renderAdmin(){
+  $("cnt").textContent=DB.items.length;
+  $("adminList").innerHTML=[...DB.items].sort((a,b)=>b.date.localeCompare(a.date)).map(i=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--g100);font-size:.88rem"><span>${i.date}　${esc(i.title)}</span><button class="btn r" onclick="delItem('${esc(i.id)}')">移除</button></div>`).join("")||"（空）";
+}
+function save(){localStorage.setItem("selDB",JSON.stringify(DB))}
+function download(){
+  const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([JSON.stringify(DB,null,2)],{type:"application/json"}));a.download="index.json";a.click();
+}
+document.addEventListener("keydown",e=>{if(e.key=="Escape")closeM()});
+load();
+</script>
+</body>
+</html>
