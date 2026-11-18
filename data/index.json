@@ -1,6 +1,6 @@
 {
   "siteTitle": "會議資料庫",
-  "siteSubtitle": "北港鎮辰光國小・每週一 16:30–17:30 例行會議",
+  "siteSubtitle": "每週一 16:30–17:30 例行會議",
   "collections": [
     {"id": "sel", "name": "SEL 週會", "color": "#4f46e5"},
     {"id": "admin", "name": "行政會議", "color": "#0ea5e9"},
