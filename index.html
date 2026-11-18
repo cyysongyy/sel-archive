@@ -64,7 +64,7 @@ footer{text-align:center;color:var(--g400);font-size:.78rem;padding:30px 0}
   <div class="panel">
     <div class="row">
       <div><label>日期</label><input type="date" id="fDate"></div>
-      <div><label>類別</label><select id="fCol"></select></div>
+      <div><label>類別</label><select id="fCol" onchange="if(this.value=='__new')newCol(true)"></select></div>
     </div>
     <label>標題</label><input id="fTitle" placeholder="例：SEL 週會：同理心與班級經營">
     <label>選擇檔案（PPT／PDF，可從電腦、手機或雲端硬碟選取）</label>
@@ -80,7 +80,7 @@ footer{text-align:center;color:var(--g400);font-size:.78rem;padding:30px 0}
     <div class="acts" style="margin-top:10px"><button class="btn g" onclick="saveTok()">儲存授權</button><button class="btn r" onclick="clearTok()">清除</button></div>
   </div>
   <div class="panel"><b>目前清單（<span id="cnt"></span> 筆）</b><div id="adminList" style="margin-top:8px"></div></div>
-  <div class="panel"><b>新增類別</b><div class="row"><div><label>類別名稱</label><input id="cName" placeholder="例：家長座談會"></div><div><label>代碼（英文）</label><input id="cId" placeholder="parent"></div></div><div class="acts" style="margin-top:10px"><button class="btn g" onclick="addCol()">新增類別</button></div></div>
+  <div class="panel"><b>類別管理</b><div id="colList" style="margin:8px 0"></div><div class="acts"><button class="btn g" onclick="newCol()">＋ 新增類別</button></div></div>
 </div>
 
 <div id="modal"><div class="box">
@@ -106,13 +106,13 @@ async function load(){
   const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));$("fDate").valueAsDate=d;$("gRepo").value=REPO();
 }
 function fillCols(){
-  $("fCol").innerHTML=DB.collections.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("");
+  const cur=$("fCol").value;$("fCol").innerHTML=DB.collections.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("")+`<option value="__new">＋ 新增類別…</option>`;if(cur&&cur!="__new")$("fCol").value=cur;
 }
 function show(v){$("browse").style.display=v=="browse"?"":"none";$("admin").style.display=v=="admin"?"":"none";$("nb").className=v=="browse"?"on":"";$("na").className=v=="admin"?"on":"";}
 function render(){
   const q=$("q").value.trim().toLowerCase();
   const years=[...new Set(DB.items.map(i=>i.date.slice(0,4)))].sort().reverse();
-  $("colChips").innerHTML=[["all","全部"],...DB.collections.map(c=>[c.id,c.name])].map(([id,n])=>`<span class="chip ${colF==id?"on":""}" onclick="colF='${id}';render()">${esc(n)}</span>`).join("");
+  $("colChips").innerHTML=[["all","全部"],...DB.collections.map(c=>[c.id,c.name])].map(([id,n])=>`<span class="chip ${colF==id?"on":""}" onclick="colF='${id}';render()">${esc(n)}</span>`).join("")+`<span class="chip" style="border-style:dashed;color:var(--pri)" onclick="newCol()">＋ 新增類別</span>`;
   $("yearChips").innerHTML=[["all","所有年度"],...years.map(y=>[y,y+" 年"])].map(([id,n])=>`<span class="chip ${yearF==id?"on":""}" onclick="yearF='${id}';render()">${n}</span>`).join("");
   const items=DB.items.filter(i=>(colF=="all"||i.collection==colF)&&(yearF=="all"||i.date.startsWith(yearF))&&(!q||[i.title,i.summary,(i.tags||[]).join(" ")].join(" ").toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date));
   $("stat").textContent=`共 ${items.length} 筆`;
@@ -173,17 +173,31 @@ async function upload(){
   }catch(e){st("❌ 失敗："+e.message+"（請檢查授權 token 與權限）","var(--err)")}
   $("upBtn").disabled=false;
 }
-async function addCol(){
-  const n=$("cName").value.trim(),id=$("cId").value.trim().toLowerCase().replace(/[^a-z0-9-]/g,"");
-  if(!n||!id||DB.collections.some(c=>c.id===id)){alert("請輸入名稱與不重複的英文代碼");return}
-  if(!TOK()){alert("請先在下方設定 GitHub 授權");return}
+async function newCol(fromSelect){
+  const n=(prompt("請輸入新類別名稱（例如：家長座談會）")||"").trim();
+  if(!n){if(fromSelect)fillCols();return}
+  if(DB.collections.some(c=>c.name===n)){alert("已有同名類別");if(fromSelect)fillCols();return}
+  if(!TOK()){alert("請先到「新增資料」頁下方設定 GitHub 授權，才能新增類別");if(fromSelect)fillCols();return}
   try{
     const jr=await (await gh("contents/data/index.json?t="+Date.now())).json();
     const db=JSON.parse(decodeURIComponent(escape(atob(jr.content.replace(/\n/g,"")))));
     const pal=["#4f46e5","#0ea5e9","#10b981","#f59e0b","#ec4899","#8b5cf6","#14b8a6"];
+    const id="c"+Date.now().toString(36);
     db.collections.push({id,name:n,color:pal[db.collections.length%pal.length]});
-    await gh("contents/data/index.json",{method:"PUT",body:JSON.stringify({message:"add collection "+id,sha:jr.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))))})});
-    DB=db;fillCols();render();$("cName").value=$("cId").value="";
+    await gh("contents/data/index.json",{method:"PUT",body:JSON.stringify({message:"add collection "+n,sha:jr.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))))})});
+    DB=db;fillCols();if(fromSelect)$("fCol").value=id;render();
+  }catch(e){alert("失敗："+e.message);if(fromSelect)fillCols()}
+}
+async function delCol(id){
+  const c=colOf(id);
+  if(DB.items.some(i=>i.collection==id)){alert("「"+c.name+"」底下還有資料，請先移除或改類別後再刪除");return}
+  if(!confirm("刪除類別「"+c.name+"」？"))return;
+  try{
+    const jr=await (await gh("contents/data/index.json?t="+Date.now())).json();
+    const db=JSON.parse(decodeURIComponent(escape(atob(jr.content.replace(/\n/g,"")))));
+    db.collections=db.collections.filter(x=>x.id!=id);
+    await gh("contents/data/index.json",{method:"PUT",body:JSON.stringify({message:"remove collection "+id,sha:jr.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))))})});
+    DB=db;if(colF==id)colF="all";fillCols();render();renderAdmin();
   }catch(e){alert("失敗："+e.message)}
 }
 async function delItem(id){
@@ -199,6 +213,7 @@ async function delItem(id){
 }
 function renderAdmin(){
   $("cnt").textContent=DB.items.length;
+  $("colList").innerHTML=DB.collections.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--g100);font-size:.9rem"><span><span class="tag col" style="background:${c.color}">${esc(c.name)}</span></span><button class="btn r" onclick="delCol('${esc(c.id)}')">刪除</button></div>`).join("");
   $("adminList").innerHTML=[...DB.items].sort((a,b)=>b.date.localeCompare(a.date)).map(i=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--g100);font-size:.88rem"><span>${i.date}　${esc(i.title)}</span><button class="btn r" onclick="delItem('${esc(i.id)}')">移除</button></div>`).join("")||"（空）";
 }
 document.addEventListener("keydown",e=>{if(e.key=="Escape")closeM()});
