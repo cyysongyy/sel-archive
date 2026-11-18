@@ -106,7 +106,7 @@ async function show(v){
 function render(){
   const q=$("q").value.trim().toLowerCase();
   const years=[...new Set(DB.items.map(i=>i.date.slice(0,4)))].sort().reverse();
-  $("colChips").innerHTML=[["all","全部"],...DB.collections.map(c=>[c.id,c.name])].map(([id,n])=>`<span class="chip ${colF==id?"on":""}" onclick="colF='${id}';render()">${esc(n)}</span>`).join("")+`<span class="chip" style="border-style:dashed;color:var(--pri)" onclick="newCol()">＋ 新增類別</span>`;
+  $("colChips").innerHTML=[["all","全部"],...DB.collections.map(c=>[c.id,c.name])].map(([id,n])=>`<span class="chip ${colF==id?"on":""}" onclick="colF='${id}';render()">${esc(n)}</span>`).join("")+`<span class="chip" style="border-style:dashed;color:var(--pri)" onclick="newCol()">＋ 新增類別</span>`+(colF!="all"&&DB.collections.some(c=>c.id==colF)?`<span class="chip" style="color:var(--g600)" onclick="renameCol('${colF}')">✎ 改名「${esc(colOf(colF).name)}」</span><span class="chip" style="color:var(--err);border-color:var(--err)" onclick="delCol('${colF}')">🗑 刪除此類別</span>`:"");
   $("yearChips").innerHTML=[["all","所有年度"],...years.map(y=>[y,y+" 年"])].map(([id,n])=>`<span class="chip ${yearF==id?"on":""}" onclick="yearF='${id}';render()">${n}</span>`).join("");
   const items=DB.items.filter(i=>(colF=="all"||i.collection==colF)&&(yearF=="all"||i.date.startsWith(yearF))&&(!q||[i.title,i.summary,(i.tags||[]).join(" ")].join(" ").toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date));
   $("stat").textContent=`共 ${items.length} 筆`;
@@ -203,10 +203,26 @@ async function newCol(fromSelect){
     DB=db;fillCols();if(fromSelect)$("fCol").value=id;render();
   }catch(e){alert("失敗："+e.message);if(fromSelect)fillCols()}
 }
+async function renameCol(id){
+  const c=DB.collections.find(x=>x.id===id);if(!c)return;
+  const n=(prompt("新的類別名稱",c.name)||"").trim();
+  if(!n||n===c.name)return;
+  if(DB.collections.some(x=>x.name===n&&x.id!==id)){alert("已有同名類別");return}
+  if(!PW()&&!(await login()))return;
+  try{
+    const jr=await (await gh("contents/data/index.json?t="+Date.now())).json();
+    const db=JSON.parse(decodeURIComponent(escape(atob(jr.content.replace(/\n/g,"")))));
+    const t=db.collections.find(x=>x.id===id);if(!t)throw new Error("找不到類別");
+    t.name=n;
+    await gh("contents/data/index.json",{method:"PUT",body:JSON.stringify({message:"rename collection "+id,sha:jr.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))))})});
+    DB=db;fillCols();render();renderAdmin();
+  }catch(e){alert("失敗："+e.message)}
+}
 async function delCol(id){
   const c=colOf(id);
   if(DB.items.some(i=>i.collection==id)){alert("「"+c.name+"」底下還有資料，請先移除或改類別後再刪除");return}
   if(!confirm("刪除類別「"+c.name+"」？"))return;
+  if(!PW()&&!(await login()))return;
   try{
     const jr=await (await gh("contents/data/index.json?t="+Date.now())).json();
     const db=JSON.parse(decodeURIComponent(escape(atob(jr.content.replace(/\n/g,"")))));
@@ -237,7 +253,7 @@ async function delItem(id){
 }
 function renderAdmin(){
   $("cnt").textContent=DB.items.length;
-  $("colList").innerHTML=DB.collections.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--g100);font-size:.9rem"><span><span class="tag col" style="background:${c.color}">${esc(c.name)}</span></span><button class="btn r" onclick="delCol('${esc(c.id)}')">刪除</button></div>`).join("");
+  $("colList").innerHTML=DB.collections.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--g100);font-size:.9rem"><span><span class="tag col" style="background:${c.color}">${esc(c.name)}</span></span><span style="display:flex;gap:6px"><button class="btn o" onclick="renameCol('${esc(c.id)}')">改名</button><button class="btn r" onclick="delCol('${esc(c.id)}')">刪除</button></span></div>`).join("");
   $("adminList").innerHTML=[...DB.items].sort((a,b)=>b.date.localeCompare(a.date)).map(i=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--g100);font-size:.88rem"><span>${i.date}　${esc(i.title)}</span><span style="display:flex;gap:6px;flex-shrink:0"><button class="btn o" onclick="preview('${esc(i.id)}')">線上預覽</button><button class="btn r" onclick="delItem('${esc(i.id)}')">移除</button></span></div>`).join("")||"（空）";
 }
 document.addEventListener("keydown",e=>{if(e.key=="Escape")closeM()});
