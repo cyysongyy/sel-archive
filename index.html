@@ -221,7 +221,7 @@ async function delItem(id){
 function renderAdmin(){
   $("cnt").textContent=DB.items.length;
   $("colList").innerHTML=DB.collections.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--g100);font-size:.9rem"><span><span class="tag col" style="background:${c.color}">${esc(c.name)}</span></span><button class="btn r" onclick="delCol('${esc(c.id)}')">刪除</button></div>`).join("");
-  $("adminList").innerHTML=[...DB.items].sort((a,b)=>b.date.localeCompare(a.date)).map(i=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--g100);font-size:.88rem"><span>${i.date}　${esc(i.title)}</span><button class="btn r" onclick="delItem('${esc(i.id)}')">移除</button></div>`).join("")||"（空）";
+  $("adminList").innerHTML=[...DB.items].sort((a,b)=>b.date.localeCompare(a.date)).map(i=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--g100);font-size:.88rem"><span>${i.date}　${esc(i.title)}</span><span style="display:flex;gap:6px;flex-shrink:0"><button class="btn o" onclick="preview('${esc(i.id)}')">線上預覽</button><button class="btn r" onclick="delItem('${esc(i.id)}')">移除</button></span></div>`).join("")||"（空）";
 }
 document.addEventListener("keydown",e=>{if(e.key=="Escape")closeM()});
 load();
