@@ -72,15 +72,8 @@ footer{text-align:center;color:var(--g400);font-size:.78rem;padding:30px 0}
     <div class="acts" style="margin-top:14px"><button class="btn" id="upBtn" onclick="upload()">⬆ 上傳到網站</button></div>
     <div id="upStat" class="stat" style="font-size:.88rem;margin-top:10px"></div>
   </div>
-  <div class="panel">
-    <b>GitHub 授權（只需設定一次）</b>
-    <div class="hint">到 GitHub → Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token。Repository access 只選 <code>sel-archive</code>，Permissions → Contents 選 <b>Read and write</b>。複製 token 貼在下方。token 只存在這台裝置的瀏覽器。</div>
-    <label>Repository</label><input id="gRepo" value="cyysongyy/sel-archive">
-    <label>Token</label><input id="gTok" type="password" placeholder="github_pat_…">
-    <div class="acts" style="margin-top:10px"><button class="btn g" onclick="saveTok()">儲存授權</button><button class="btn r" onclick="clearTok()">清除</button></div>
-  </div>
   <div class="panel"><b>目前清單（<span id="cnt"></span> 筆）</b><div id="adminList" style="margin-top:8px"></div></div>
-  <div class="panel"><b>類別管理</b><div id="colList" style="margin:8px 0"></div><div class="acts"><button class="btn g" onclick="newCol()">＋ 新增類別</button></div></div>
+  <div class="panel"><b>類別管理</b><div id="colList" style="margin:8px 0"></div><div class="acts"><button class="btn g" onclick="newCol()">＋ 新增類別</button><button class="btn r" onclick="logout()">登出管理</button></div></div>
 </div>
 
 <div id="modal"><div class="box">
@@ -103,12 +96,13 @@ async function load(){
   $("siteTitle").textContent=DB.siteTitle;$("siteSub").textContent=DB.siteSubtitle||"";document.title=DB.siteTitle;
   fillCols();render();renderAdmin();
   // 預設日期：最近的週一
-  const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));$("fDate").valueAsDate=d;$("gRepo").value=REPO();
+  const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));$("fDate").valueAsDate=d;
 }
 function fillCols(){
   const cur=$("fCol").value;$("fCol").innerHTML=DB.collections.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("")+`<option value="__new">＋ 新增類別…</option>`;if(cur&&cur!="__new")$("fCol").value=cur;
 }
-function show(v){$("browse").style.display=v=="browse"?"":"none";$("admin").style.display=v=="admin"?"":"none";$("nb").className=v=="browse"?"on":"";$("na").className=v=="admin"?"on":"";}
+async function show(v){
+  if(v=="admin"&&!PW()&&!(await login()))return;$("browse").style.display=v=="browse"?"":"none";$("admin").style.display=v=="admin"?"":"none";$("nb").className=v=="browse"?"on":"";$("na").className=v=="admin"?"on":"";}
 function render(){
   const q=$("q").value.trim().toLowerCase();
   const years=[...new Set(DB.items.map(i=>i.date.slice(0,4)))].sort().reverse();
@@ -138,21 +132,33 @@ function preview(id){
 }
 function closeM(){$("modal").style.display="none";$("mFrame").src="about:blank"}
 /* ---- 管理 ---- */
-const TOK=()=>localStorage.getItem("ghTok")||"",REPO=()=>localStorage.getItem("ghRepo")||"cyysongyy/sel-archive";
-function saveTok(){const t=$("gTok").value.trim();if(!t){alert("請貼上 token");return}localStorage.setItem("ghTok",t);localStorage.setItem("ghRepo",$("gRepo").value.trim()||"cyysongyy/sel-archive");$("gTok").value="";alert("已儲存授權");}
-function clearTok(){localStorage.removeItem("ghTok");alert("已清除")}
+const GAS_URL="https://script.google.com/macros/s/AKfycbxQSC5PLUVUYLYk_Fef1wKNuX5LTkpdwA6WFnp0OYF9aMfwEEoGWYjBXQsJw3rR6JLg/exec";
+const PW=()=>localStorage.getItem("adminPw")||"";
 async function gh(path,opt={}){
-  const r=await fetch(`https://api.github.com/repos/${REPO()}/${path}`,{...opt,headers:{Authorization:"Bearer "+TOK(),Accept:"application/vnd.github+json","Content-Type":"application/json"}});
-  if(!r.ok&&!(opt.allow404&&r.status==404)){let m="";try{m=(await r.json()).message}catch(e){}throw new Error(r.status+" "+m)}
-  return r;
+  if(!GAS_URL)throw new Error("尚未設定 GAS_URL");
+  const r=await fetch(GAS_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({pw:PW(),path,method:opt.method||"GET",body:opt.body||null})});
+  const j=await r.json();
+  const resp={ok:j.status>=200&&j.status<300,status:j.status,json:async()=>j.body};
+  if(!resp.ok&&!(opt.allow404&&j.status==404)){
+    if(j.status==401){localStorage.removeItem("adminPw")}
+    throw new Error(j.status==401?"密碼錯誤":(j.status+" "+((j.body&&j.body.message)||"")))
+  }
+  return resp;
 }
+async function login(){
+  const pw=(prompt("請輸入管理密碼")||"").trim();if(!pw)return false;
+  localStorage.setItem("adminPw",pw);
+  try{await gh("contents/data/index.json?t="+Date.now());return true}
+  catch(e){localStorage.removeItem("adminPw");alert(e.message=="密碼錯誤"?"密碼錯誤":"連線失敗："+e.message);return false}
+}
+function logout(){localStorage.removeItem("adminPw");show("browse")}
 const readB64=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(",")[1]);r.onerror=no;r.readAsDataURL(f)});
 const st=(m,c)=>{$("upStat").style.color=c||"var(--g600)";$("upStat").textContent=m};
 async function upload(){
   const date=$("fDate").value,col=$("fCol").value,f=$("fFile").files[0];
   if(!date||!f){alert("請選擇日期與檔案");return}
   const title=$("fTitle").value.trim()||f.name.replace(/\.[^.]+$/,"");
-  if(!TOK()){alert("請先在下方設定 GitHub 授權");return}
+  if(!PW()){alert("請先登入管理");return}
   const ext=(f.name.split(".").pop()||"pptx").toLowerCase();
   $("upBtn").disabled=true;
   try{
@@ -171,14 +177,14 @@ async function upload(){
     DB=db;render();renderAdmin();fillCols();
     $("fTitle").value="";$("fFile").value="";
     st("✅ 上傳完成！網站約 1–2 分鐘後更新（可按 Ctrl+F5 重新整理）。","var(--ok)");
-  }catch(e){st("❌ 失敗："+e.message+"（請檢查授權 token 與權限）","var(--err)")}
+  }catch(e){st("❌ 失敗："+e.message+"（請確認密碼與網路）","var(--err)")}
   $("upBtn").disabled=false;
 }
 async function newCol(fromSelect){
   const n=(prompt("請輸入新類別名稱（例如：家長座談會）")||"").trim();
   if(!n){if(fromSelect)fillCols();return}
   if(DB.collections.some(c=>c.name===n)){alert("已有同名類別");if(fromSelect)fillCols();return}
-  if(!TOK()){alert("請先到「新增資料」頁下方設定 GitHub 授權，才能新增類別");if(fromSelect)fillCols();return}
+  if(!PW()&&!(await login())){if(fromSelect)fillCols();return}
   try{
     const jr=await (await gh("contents/data/index.json?t="+Date.now())).json();
     const db=JSON.parse(decodeURIComponent(escape(atob(jr.content.replace(/\n/g,"")))));
@@ -203,7 +209,7 @@ async function delCol(id){
 }
 async function delItem(id){
   if(!confirm("從清單移除這筆？（PPT 檔案本身不會被刪除）"))return;
-  if(!TOK()){alert("請先在下方設定 GitHub 授權");return}
+  if(!PW()){alert("請先登入管理");return}
   try{
     const jr=await (await gh("contents/data/index.json?t="+Date.now())).json();
     const db=JSON.parse(decodeURIComponent(escape(atob(jr.content.replace(/\n/g,"")))));
