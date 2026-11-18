@@ -118,7 +118,7 @@ function render(){
     h+=`<div class="card"><div class="date"><b>${+i.date.slice(8)}</b><span>週${wd}</span></div><div class="body">
       <h3>${esc(i.title)}</h3><span class="tag col" style="background:${c.color}">${esc(c.name)}</span>${(i.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}
       ${i.summary?`<p>${esc(i.summary)}</p>`:""}
-      <div class="acts"><button class="btn" onclick="preview('${esc(i.id)}')">👁 線上預覽</button><a class="btn o" href="${esc(i.file)}" download>⬇ 下載 PPT</a>${i.audio?`<a class="btn g" href="${esc(i.audio)}" target="_blank" rel="noopener">🎧 錄音</a>`:""}</div></div></div>`;
+      <div class="acts"><button class="btn" onclick="preview('${esc(i.id)}')">👁 線上預覽</button><a class="btn o" href="${esc(i.file)}" download>⬇ 下載 PPT</a><button class="btn r" onclick="delItem('${esc(i.id)}')">🗑 刪除</button>${i.audio?`<a class="btn g" href="${esc(i.audio)}" target="_blank" rel="noopener">🎧 錄音</a>`:""}</div></div></div>`;
   }
   $("list").innerHTML=h;
 }
@@ -208,14 +208,23 @@ async function delCol(id){
   }catch(e){alert("失敗："+e.message)}
 }
 async function delItem(id){
-  if(!confirm("從清單移除這筆？（PPT 檔案本身不會被刪除）"))return;
-  if(!PW()){alert("請先登入管理");return}
+  const it=DB.items.find(x=>x.id===id);if(!it)return;
+  if(!confirm("刪除「"+it.title+"」？\n資料與 PPT 檔案都會刪除，無法復原。"))return;
+  if(!PW()&&!(await login()))return;
   try{
     const jr=await (await gh("contents/data/index.json?t="+Date.now())).json();
     const db=JSON.parse(decodeURIComponent(escape(atob(jr.content.replace(/\n/g,"")))));
     db.items=db.items.filter(i=>i.id!==id);
     await gh("contents/data/index.json",{method:"PUT",body:JSON.stringify({message:"remove "+id,sha:jr.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))))})});
     DB=db;render();renderAdmin();
+    let fileMsg="";
+    if(/^files\/[^\/?]+$/.test(it.file)&&!db.items.some(i=>i.file===it.file)){
+      try{
+        const fr=await (await gh("contents/"+it.file+"?t="+Date.now())).json();
+        await gh("contents/"+it.file,{method:"DELETE",body:JSON.stringify({message:"delete "+it.file,sha:fr.sha})});
+      }catch(e){fileMsg="\n（清單已移除，但 PPT 檔案未能刪除："+e.message+"）"}
+    }
+    alert("已刪除"+fileMsg);
   }catch(e){alert("失敗："+e.message)}
 }
 function renderAdmin(){
