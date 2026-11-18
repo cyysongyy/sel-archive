@@ -41,6 +41,7 @@ label{display:block;font-size:.85rem;font-weight:600;margin:12px 0 4px;color:var
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}@media(max-width:560px){.row{grid-template-columns:1fr}.card{flex-direction:column;gap:8px}}
 pre{background:var(--g900);color:#d1fae5;padding:12px;border-radius:10px;overflow:auto;font-size:.8rem;max-height:240px}
 .hint{font-size:.82rem;color:var(--g600);background:var(--pril);padding:10px 12px;border-radius:10px;margin:10px 0}
+.qrow{display:grid;grid-template-columns:1fr 140px 130px auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid var(--g100);font-size:.88rem}.qrow input,.qrow select{padding:6px 8px;font-size:.85rem}@media(max-width:620px){.qrow{grid-template-columns:1fr 1fr}.qrow .qt{grid-column:1/3}}
 footer{text-align:center;color:var(--g400);font-size:.78rem;padding:30px 0}
 </style>
 </head>
@@ -62,14 +63,13 @@ footer{text-align:center;color:var(--g400);font-size:.78rem;padding:30px 0}
 
 <div class="wrap" id="admin" style="display:none">
   <div class="panel">
-    <div class="row">
-      <div><label>日期</label><input type="date" id="fDate"></div>
-      <div><label>類別</label><select id="fCol" onchange="if(this.value=='__new')newCol(true)"></select></div>
+    <div id="drop" onclick="$('fFile').click()" style="border:2px dashed var(--g200);border-radius:12px;padding:26px 12px;text-align:center;color:var(--g600);cursor:pointer;background:var(--g50)">
+      📂 點此選擇檔案，或把 PPT／PDF 拖曳到這裡（可一次選多個）<br><small style="color:var(--g400)">日期、類別、標題由系統從檔名自動偵測</small>
     </div>
-        <label>選擇檔案（PPT／PDF，可從電腦、手機或雲端硬碟選取）</label>
-    <input type="file" id="fFile" onchange="onFile()" accept=".ppt,.pptx,.pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint,application/pdf">
-    <div class="acts" style="margin-top:14px"><button class="btn" id="upBtn" onclick="upload()">⬆ 上傳到網站</button></div>
-    <div id="fDetect" class="stat" style="font-size:.88rem;margin-top:8px"></div>
+    <input type="file" id="fFile" multiple style="display:none" onchange="addFiles(this.files)" accept=".ppt,.pptx,.pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint,application/pdf">
+    <div id="queue" style="margin-top:10px"></div>
+    <label style="display:flex;gap:8px;align-items:center;font-weight:400;margin-top:12px"><input type="checkbox" id="autoUp" checked style="width:auto"> 檔名含日期時，選好檔案後自動上傳</label>
+    <div class="acts" style="margin-top:12px"><button class="btn" id="upBtn" onclick="uploadAll()">⬆ 上傳到網站</button></div>
     <div id="upStat" class="stat" style="font-size:.88rem;margin-top:10px"></div>
   </div>
   <div class="panel"><b>目前清單（<span id="cnt"></span> 筆）</b><div id="adminList" style="margin-top:8px"></div></div>
@@ -96,11 +96,9 @@ async function load(){
   $("siteTitle").textContent=DB.siteTitle;$("siteSub").textContent=DB.siteSubtitle||"";document.title=DB.siteTitle;
   fillCols();render();renderAdmin();
   // 預設日期：最近的週一
-  const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));$("fDate").valueAsDate=d;
+  setupDrop();
 }
-function fillCols(){
-  const cur=$("fCol").value;$("fCol").innerHTML=DB.collections.map(c=>`<option value="${esc(c.id)}">${esc(c.name)}</option>`).join("")+`<option value="__new">＋ 新增類別…</option>`;if(cur&&cur!="__new")$("fCol").value=cur;
-}
+function fillCols(){renderQueue()}
 async function show(v){
   if(v=="admin"&&!PW()&&!(await login()))return;$("browse").style.display=v=="browse"?"":"none";$("admin").style.display=v=="admin"?"":"none";$("nb").className=v=="browse"?"on":"";$("na").className=v=="admin"?"on":"";}
 function render(){
@@ -152,47 +150,97 @@ async function login(){
   catch(e){localStorage.removeItem("adminPw");alert(e.message=="密碼錯誤"?"密碼錯誤":"連線失敗："+e.message);return false}
 }
 function logout(){localStorage.removeItem("adminPw");show("browse")}
-function onFile(){
-  const f=$("fFile").files[0];if(!f){$("fDetect").textContent="";return}
-  const name=f.name.replace(/\.[^.]+$/,"");
-  let m=name.match(/(20\d{2})[-_.\/年]?(\d{1,2})[-_.\/月]?(\d{1,2})/),d="";
-  if(m){const mo=+m[2],da=+m[3];if(mo>=1&&mo<=12&&da>=1&&da<=31)d=`${m[1]}-${String(mo).padStart(2,"0")}-${String(da).padStart(2,"0")}`}
-  if(d)$("fDate").value=d;
-  $("fDetect").textContent="標題：「"+name+"」"+(d?"　日期已自動偵測為 "+d:"　（檔名中沒有日期，請確認上方日期）");
+let Q=[];
+const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+function detectDate(name,f){
+  const m=name.match(/(20\d{2})[-_.\/年]?(\d{1,2})[-_.\/月]?(\d{1,2})/);
+  if(m){const mo=+m[2],da=+m[3];if(mo>=1&&mo<=12&&da>=1&&da<=31)return{d:`${m[1]}-${String(mo).padStart(2,"0")}-${String(da).padStart(2,"0")}`,fromName:true}}
+  return{d:iso(new Date(f.lastModified||Date.now())),fromName:false};
+}
+function detectCol(name){
+  const n=name.toLowerCase().replace(/\s/g,"");
+  for(const c of DB.collections){
+    const cn=c.name.toLowerCase().replace(/\s/g,"");
+    if(cn&&n.includes(cn))return c.id;
+    const w=(c.name.match(/[A-Za-z]{3,}/)||[""])[0].toLowerCase();
+    if(w&&n.includes(w))return c.id;
+  }
+  const last=localStorage.getItem("lastCol");
+  return DB.collections.some(c=>c.id===last)?last:DB.collections[0].id;
+}
+function addFiles(list){
+  const bad=[];
+  for(const f of list){
+    if(!/\.(pptx?|pdf)$/i.test(f.name)){bad.push(f.name);continue}
+    const title=f.name.replace(/\.[^.]+$/,""),dt=detectDate(title,f);
+    Q.push({f,title,date:dt.d,fromName:dt.fromName,col:detectCol(title),status:""});
+  }
+  $("fFile").value="";
+  if(bad.length)alert("不支援的檔案（只收 PPT／PDF）：\n"+bad.join("\n"));
+  renderQueue();
+  if($("autoUp").checked&&Q.length&&Q.every(q=>q.fromName))uploadAll();
+}
+function renderQueue(){
+  const el=$("queue");if(!el)return;
+  const opts=sel=>DB.collections.map(c=>`<option value="${esc(c.id)}" ${c.id==sel?"selected":""}>${esc(c.name)}</option>`).join("");
+  el.innerHTML=Q.map((q,i)=>`<div class="qrow"><div class="qt">📄 <b>${esc(q.title)}</b> <span style="color:var(--g400)">${(q.f.size/1048576).toFixed(1)} MB</span>${q.fromName?"":'<div style="color:var(--warn);font-size:.78rem">檔名沒有日期，已用檔案修改日期，請確認</div>'}${q.status?`<div style="font-size:.78rem;color:${q.status.startsWith("❌")?"var(--err)":"var(--g600)"}">${esc(q.status)}</div>`:""}</div>
+    <input type="date" value="${q.date}" onchange="Q[${i}].date=this.value">
+    <select onchange="Q[${i}].col=this.value;localStorage.setItem('lastCol',this.value)">${opts(q.col)}</select>
+    <button class="btn g" onclick="Q.splice(${i},1);renderQueue()">✕</button></div>`).join("");
+}
+function setupDrop(){
+  const d=$("drop");if(!d)return;
+  ["dragenter","dragover"].forEach(e=>d.addEventListener(e,ev=>{ev.preventDefault();d.style.borderColor="var(--pri)"}));
+  ["dragleave","drop"].forEach(e=>d.addEventListener(e,ev=>{ev.preventDefault();d.style.borderColor=""}));
+  d.addEventListener("drop",ev=>addFiles(ev.dataTransfer.files));
 }
 const readB64=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(",")[1]);r.onerror=no;r.readAsDataURL(f)});
 const st=(m,c)=>{$("upStat").style.color=c||"var(--g600)";$("upStat").textContent=m};
-async function upload(){
-  const date=$("fDate").value,col=$("fCol").value,f=$("fFile").files[0];
-  if(!date||!f){alert("請選擇日期與檔案");return}
-  const title=f.name.replace(/\.[^.]+$/,"");
-  if(!PW()){alert("請先登入管理");return}
-  const ext=(f.name.split(".").pop()||"pptx").toLowerCase();
-  $("upBtn").disabled=true;
+let uploading=false;
+async function uploadAll(){
+  if(uploading)return;
+  if(!Q.length){alert("請先選擇檔案");return}
+  if(!PW()&&!(await login()))return;
+  if(Q.some(q=>!q.date)){alert("有檔案缺少日期");return}
+  uploading=true;$("upBtn").disabled=true;
+  const done=[],used=new Set(),failed=[];
   try{
-    let fname=`${date}-${col}.${ext}`;
-    st("檢查檔名…");
-    const ex=await gh("contents/files/"+fname,{allow404:true});
-    if(ex.status!=404)fname=`${date}-${col}-${Date.now().toString(36).slice(-3)}.${ext}`;
-    st("上傳檔案中…（"+(f.size/1048576).toFixed(1)+" MB）");
-    await gh("contents/files/"+fname,{method:"PUT",body:JSON.stringify({message:"add "+fname,content:await readB64(f)})});
-    st("更新清單中…");
-    const jr=await (await gh("contents/data/index.json?t="+Date.now())).json();
-    const db=JSON.parse(decodeURIComponent(escape(atob(jr.content.replace(/\n/g,"")))));
-    let id=`${date}-${col}`;if(db.items.some(i=>i.id===id))id+="-"+Date.now().toString(36).slice(-3);
-    db.items.push({id,date,collection:col,title,file:"files/"+fname});
-    await gh("contents/data/index.json",{method:"PUT",body:JSON.stringify({message:"add item "+id,sha:jr.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))))})});
-    DB=db;render();renderAdmin();fillCols();
-    $("fFile").value="";$("fDetect").textContent="";
-    st("✅ 上傳完成！網站約 1–2 分鐘後更新（可按 Ctrl+F5 重新整理）。","var(--ok)");
+    for(let i=0;i<Q.length;i++){
+      const q=Q[i];
+      try{
+        const ext=(q.f.name.split(".").pop()||"pptx").toLowerCase();
+        let fname=`${q.date}-${q.col}.${ext}`;
+        q.status="檢查檔名…";renderQueue();
+        const ex=await gh("contents/files/"+fname,{allow404:true});
+        if(ex.status!=404||used.has(fname))fname=`${q.date}-${q.col}-${Date.now().toString(36).slice(-4)}.${ext}`;
+        used.add(fname);
+        q.status="上傳中…";st(`上傳 ${i+1}/${Q.length}：${q.title}`);renderQueue();
+        await gh("contents/files/"+fname,{method:"PUT",body:JSON.stringify({message:"add "+fname,content:await readB64(q.f)})});
+        done.push({date:q.date,collection:q.col,title:q.title,file:"files/"+fname});
+        q.status="✅ 完成";
+      }catch(e){q.status="❌ "+e.message;failed.push(q)}
+    }
+    if(done.length){
+      st("更新清單中…");
+      const jr=await (await gh("contents/data/index.json?t="+Date.now())).json();
+      const db=JSON.parse(decodeURIComponent(escape(atob(jr.content.replace(/\n/g,"")))));
+      for(const it of done){
+        let id=`${it.date}-${it.collection}`;if(db.items.some(x=>x.id===id))id+="-"+Date.now().toString(36).slice(-4)+Math.floor(Math.random()*99);
+        db.items.push({id,...it});
+      }
+      await gh("contents/data/index.json",{method:"PUT",body:JSON.stringify({message:"add "+done.length+" item(s)",sha:jr.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))))})});
+      DB=db;render();renderAdmin();
+    }
+    Q=failed;renderQueue();
+    st(failed.length?`⚠️ 完成 ${done.length} 筆，${failed.length} 筆失敗（見上方紅字，可再按上傳重試）`:`✅ 全部上傳完成（${done.length} 筆）！網站約 1–2 分鐘後更新，可按 Ctrl+F5 重新整理。`,failed.length?"var(--warn)":"var(--ok)");
   }catch(e){st("❌ 失敗："+e.message+"（請確認密碼與網路）","var(--err)")}
-  $("upBtn").disabled=false;
+  uploading=false;$("upBtn").disabled=false;
 }
 async function newCol(fromSelect){
   const n=(prompt("請輸入新類別名稱（例如：家長座談會）")||"").trim();
-  if(!n){if(fromSelect)fillCols();return}
-  if(DB.collections.some(c=>c.name===n)){alert("已有同名類別");if(fromSelect)fillCols();return}
-  if(!PW()&&!(await login())){if(fromSelect)fillCols();return}
+  if(!n){return}
+  if(DB.collections.some(c=>c.name===n)){alert("已有同名類別");return}
+  if(!PW()&&!(await login())){return}
   try{
     const jr=await (await gh("contents/data/index.json?t="+Date.now())).json();
     const db=JSON.parse(decodeURIComponent(escape(atob(jr.content.replace(/\n/g,"")))));
@@ -200,7 +248,7 @@ async function newCol(fromSelect){
     const id="c"+Date.now().toString(36);
     db.collections.push({id,name:n,color:pal[db.collections.length%pal.length]});
     await gh("contents/data/index.json",{method:"PUT",body:JSON.stringify({message:"add collection "+n,sha:jr.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))))})});
-    DB=db;fillCols();if(fromSelect)$("fCol").value=id;render();
+    DB=db;fillCols();render();
   }catch(e){alert("失敗："+e.message);if(fromSelect)fillCols()}
 }
 async function renameCol(id){
