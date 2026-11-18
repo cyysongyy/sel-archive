@@ -66,10 +66,10 @@ footer{text-align:center;color:var(--g400);font-size:.78rem;padding:30px 0}
       <div><label>日期</label><input type="date" id="fDate"></div>
       <div><label>類別</label><select id="fCol" onchange="if(this.value=='__new')newCol(true)"></select></div>
     </div>
-    <label>標題（選填，不填則使用檔名）</label><input id="fTitle" placeholder="例：SEL 週會：同理心與班級經營">
-    <label>選擇檔案（PPT／PDF，可從電腦、手機或雲端硬碟選取）</label>
-    <input type="file" id="fFile" accept=".ppt,.pptx,.pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint,application/pdf">
+        <label>選擇檔案（PPT／PDF，可從電腦、手機或雲端硬碟選取）</label>
+    <input type="file" id="fFile" onchange="onFile()" accept=".ppt,.pptx,.pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint,application/pdf">
     <div class="acts" style="margin-top:14px"><button class="btn" id="upBtn" onclick="upload()">⬆ 上傳到網站</button></div>
+    <div id="fDetect" class="stat" style="font-size:.88rem;margin-top:8px"></div>
     <div id="upStat" class="stat" style="font-size:.88rem;margin-top:10px"></div>
   </div>
   <div class="panel"><b>目前清單（<span id="cnt"></span> 筆）</b><div id="adminList" style="margin-top:8px"></div></div>
@@ -152,12 +152,20 @@ async function login(){
   catch(e){localStorage.removeItem("adminPw");alert(e.message=="密碼錯誤"?"密碼錯誤":"連線失敗："+e.message);return false}
 }
 function logout(){localStorage.removeItem("adminPw");show("browse")}
+function onFile(){
+  const f=$("fFile").files[0];if(!f){$("fDetect").textContent="";return}
+  const name=f.name.replace(/\.[^.]+$/,"");
+  let m=name.match(/(20\d{2})[-_.\/年]?(\d{1,2})[-_.\/月]?(\d{1,2})/),d="";
+  if(m){const mo=+m[2],da=+m[3];if(mo>=1&&mo<=12&&da>=1&&da<=31)d=`${m[1]}-${String(mo).padStart(2,"0")}-${String(da).padStart(2,"0")}`}
+  if(d)$("fDate").value=d;
+  $("fDetect").textContent="標題：「"+name+"」"+(d?"　日期已自動偵測為 "+d:"　（檔名中沒有日期，請確認上方日期）");
+}
 const readB64=f=>new Promise((ok,no)=>{const r=new FileReader();r.onload=()=>ok(r.result.split(",")[1]);r.onerror=no;r.readAsDataURL(f)});
 const st=(m,c)=>{$("upStat").style.color=c||"var(--g600)";$("upStat").textContent=m};
 async function upload(){
   const date=$("fDate").value,col=$("fCol").value,f=$("fFile").files[0];
   if(!date||!f){alert("請選擇日期與檔案");return}
-  const title=$("fTitle").value.trim()||f.name.replace(/\.[^.]+$/,"");
+  const title=f.name.replace(/\.[^.]+$/,"");
   if(!PW()){alert("請先登入管理");return}
   const ext=(f.name.split(".").pop()||"pptx").toLowerCase();
   $("upBtn").disabled=true;
@@ -175,7 +183,7 @@ async function upload(){
     db.items.push({id,date,collection:col,title,file:"files/"+fname});
     await gh("contents/data/index.json",{method:"PUT",body:JSON.stringify({message:"add item "+id,sha:jr.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))))})});
     DB=db;render();renderAdmin();fillCols();
-    $("fTitle").value="";$("fFile").value="";
+    $("fFile").value="";$("fDetect").textContent="";
     st("✅ 上傳完成！網站約 1–2 分鐘後更新（可按 Ctrl+F5 重新整理）。","var(--ok)");
   }catch(e){st("❌ 失敗："+e.message+"（請確認密碼與網路）","var(--err)")}
   $("upBtn").disabled=false;
