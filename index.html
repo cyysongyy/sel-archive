@@ -79,6 +79,9 @@ h2.month small{font-weight:500;color:var(--muted);font-size:.78rem}
 #modal .box{background:#fff;border-radius:16px;height:100%;max-width:1120px;margin:0 auto;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.5)}
 #modal .hd{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);gap:10px}
 #modal iframe{flex:1;border:0;width:100%;background:var(--g100)}
+#pdfv{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;background:#e8eaf1;padding:14px}
+#pdfv .pg{width:100%;max-width:980px;margin:0 auto 14px;background:#fff;box-shadow:0 2px 12px rgba(15,23,42,.14);border-radius:4px;overflow:hidden}
+#pdfv canvas{display:block;width:100%;height:auto}
 .note{font-size:.78rem;color:var(--muted);padding:8px 16px;border-top:1px solid var(--line)}
 /* admin */
 label{display:block;font-size:.82rem;font-weight:600;margin:14px 0 6px;color:var(--g700)}
@@ -130,9 +133,10 @@ footer{text-align:center;color:var(--muted);font-size:.78rem;padding:44px 0 36px
 </div>
 
 <div id="modal"><div class="box">
-  <div class="hd"><b id="mTitle" style="font-size:.95rem"></b><div class="acts" style="margin:0"><a class="btn o" id="mDl" download>下載</a><button class="btn g" onclick="closeM()">關閉</button></div></div>
+  <div class="hd"><div style="min-width:0"><b id="mTitle" style="font-size:.95rem;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></b><span id="mPages" style="font-size:.76rem;color:var(--muted)"></span></div><div class="acts" style="margin:0;flex-shrink:0"><a class="btn o" id="mOpen" target="_blank" rel="noopener" style="display:none">新分頁開啟</a><a class="btn o" id="mDl" download>下載</a><button class="btn g" onclick="closeM()">關閉</button></div></div>
   <iframe id="mFrame" allowfullscreen></iframe>
-  <div class="note">線上預覽使用 Microsoft Office 檢視器，需檔案已公開上傳至網路；若無法顯示請直接下載。</div>
+  <div id="pdfv" style="display:none"></div>
+  <div class="note" id="mNote"></div>
 </div></div>
 <footer>會議資料庫 ・ 讓每一次會議的成果都能被找到</footer>
 
@@ -182,14 +186,46 @@ function render(){
   $("list").innerHTML=h;
 }
 function absUrl(p){return new URL(p,location.href).href}
+let pdfP=null,pdfTok=0;
+function loadPdfJs(){
+  if(pdfP)return pdfP;
+  pdfP=new Promise((ok,no)=>{const s=document.createElement("script");s.src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+    s.onload=()=>{pdfjsLib.GlobalWorkerOptions.workerSrc="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";ok(pdfjsLib)};
+    s.onerror=()=>{pdfP=null;no()};document.head.appendChild(s)});
+  return pdfP;
+}
+async function showPdf(url){
+  const tok=++pdfTok,box=$("pdfv");box.innerHTML='<div class="empty">載入中…</div>';
+  try{
+    const lib=await loadPdfJs(),doc=await lib.getDocument(url).promise;if(tok!==pdfTok)return;
+    box.innerHTML="";$("mPages").textContent="共 "+doc.numPages+" 頁";
+    const v1=(await doc.getPage(1)).getViewport({scale:1});
+    const io=new IntersectionObserver(es=>es.forEach(async e=>{
+      if(!e.isIntersecting)return;const d=e.target;io.unobserve(d);
+      const pg=await doc.getPage(+d.dataset.n);if(tok!==pdfTok)return;
+      const base=pg.getViewport({scale:1}),dpr=Math.min(window.devicePixelRatio||1,2),vp=pg.getViewport({scale:d.clientWidth/base.width*dpr});
+      const c=document.createElement("canvas");c.width=vp.width;c.height=vp.height;
+      await pg.render({canvasContext:c.getContext("2d"),viewport:vp}).promise;if(tok!==pdfTok)return;
+      d.style.aspectRatio="auto";d.innerHTML="";d.appendChild(c);
+    }),{root:box,rootMargin:"800px 0px"});
+    for(let n=1;n<=doc.numPages;n++){const d=document.createElement("div");d.className="pg";d.dataset.n=n;d.style.aspectRatio=v1.width+"/"+v1.height;box.appendChild(d);io.observe(d)}
+  }catch(e){if(tok===pdfTok)box.innerHTML='<div class="empty">無法載入預覽，請改按「下載」。</div>'}
+}
 function preview(id){
   const i=DB.items.find(x=>x.id===id);if(!i)return;
-  const u=absUrl(i.file);
-  $("mTitle").textContent=i.date+"　"+i.title;$("mDl").href=i.file;
-  $("mFrame").src=/\.pdf$/i.test(i.file)?i.file:"https://view.officeapps.live.com/op/embed.aspx?src="+encodeURIComponent(u);
+  const isPdf=/\.pdf$/i.test(i.file),u=absUrl(i.file);
+  $("mTitle").textContent=i.date+"　"+i.title;$("mDl").href=i.file;$("mPages").textContent="";
+  $("mFrame").style.display=isPdf?"none":"";$("pdfv").style.display=isPdf?"block":"none";
+  if(isPdf){$("mFrame").src="about:blank";$("mOpen").style.display="none";$("mNote").textContent="上下滑動即可瀏覽所有頁面。";showPdf(i.file)}
+  else{
+    pdfTok++;
+    $("mFrame").src="https://view.officeapps.live.com/op/embed.aspx?src="+encodeURIComponent(u);
+    $("mOpen").href="https://view.officeapps.live.com/op/view.aspx?src="+encodeURIComponent(u);$("mOpen").style.display="";
+    $("mNote").textContent="PPT 使用 Microsoft Office 檢視器，若只看到一頁或無法顯示，請按「新分頁開啟」或「下載」。";
+  }
   $("modal").style.display="block";
 }
-function closeM(){$("modal").style.display="none";$("mFrame").src="about:blank"}
+function closeM(){$("modal").style.display="none";$("mFrame").src="about:blank";pdfTok++;$("pdfv").innerHTML=""}
 /* ---- 管理 ---- */
 const GAS_URL="https://script.google.com/macros/s/AKfycbxQSC5PLUVUYLYk_Fef1wKNuX5LTkpdwA6WFnp0OYF9aMfwEEoGWYjBXQsJw3rR6JLg/exec";
 const PW=()=>localStorage.getItem("adminPw")||"";
