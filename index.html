@@ -103,7 +103,7 @@ footer{text-align:center;color:var(--muted);font-size:.78rem;padding:44px 0 36px
 <body>
 <header><div class="wrap">
   <div class="brand"><div class="logo"><svg viewBox="0 0 24 24"><path d="M4 19.5V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14.5"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M9 7.5h6M9 11h4"/></svg></div>
-    <div><h1 id="siteTitle">會議資料庫</h1><p id="siteSub"></p></div></div>
+    <div><h1 id="siteTitle">會議資料庫</h1></div></div>
   <div class="hstats" id="hstats"></div>
   <nav><button id="nb" class="on" onclick="show('browse')"><svg class="i" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>瀏覽</button><button id="na" onclick="show('admin')"><svg class="i" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>上傳管理</button></nav>
 </div></header>
@@ -167,7 +167,7 @@ const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&
 async function load(){
   try{const r=await fetch("data/index.json?t="+Date.now());if(!r.ok)throw 0;DB=await r.json();}
   catch(e){DB=JSON.parse(localStorage.getItem("selDB")||"null")||FALLBACK;}
-  $("siteTitle").textContent=DB.siteTitle;$("siteSub").textContent=DB.siteSubtitle||"";document.title=DB.siteTitle;
+  $("siteTitle").textContent=DB.siteTitle;document.title=DB.siteTitle;
   fillCols();render();renderAdmin();
   // 預設日期：最近的週一
   setupDrop();$("useAI").checked=localStorage.getItem("aiOn")!=="0";
