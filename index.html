@@ -13,7 +13,7 @@
 *{box-sizing:border-box}
 html{-webkit-text-size-adjust:100%}
 body{margin:0;font-family:"Noto Sans TC","PingFang TC","Microsoft JhengHei",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);line-height:1.65;-webkit-font-smoothing:antialiased;font-variant-numeric:tabular-nums}
-.wrap{max-width:480px;margin:0 auto;padding:0 20px}
+.wrap{max-width:1680px;margin:0 auto;padding:0 20px}
 svg.i{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0;vertical-align:-3px}
 /* header */
 header{position:relative;color:#fff;padding:34px 0 0;background:radial-gradient(1200px 400px at 85% -20%,rgba(129,140,248,.45),transparent 60%),linear-gradient(135deg,#1e1b4b 0%,#312e81 55%,#3730a3 100%);overflow:hidden;width:50%;min-width:min(100%,520px);margin:0 auto;border-radius:0 0 22px 22px}
@@ -133,6 +133,24 @@ h2.month{font-size:.8rem;margin:10px 0 6px;gap:8px}h2.month small{font-size:.68r
 .meta{margin:0}
 h2.month{margin:8px 0 4px}
 .chips{margin-top:5px}.bar{padding:8px 0 2px}
+/* wide layout */
+.wrap{padding:0 18px}
+header{width:100%;min-width:0;border-radius:0 0 14px 14px}
+.bar{display:flex;flex-wrap:wrap;align-items:center;gap:6px 16px;padding:10px 0 6px}
+.bar .chips{margin:0}
+.bar .search{flex:0 0 260px}
+.bar #colChips,.bar #yearChips,.bar #themeChips{flex:0 1 auto}
+#list{display:grid;grid-template-columns:repeat(auto-fill,minmax(560px,1fr));gap:0 14px;align-items:start}
+#list h2.month,#list .empty{grid-column:1/-1}
+.card{align-items:flex-start;padding:9px 12px;margin-bottom:8px}
+.date{width:46px;padding:4px 0}.date .mo{display:block;font-size:.58rem}.date b{font-size:1.15rem}
+.meta{flex-wrap:wrap;overflow:visible;gap:4px;margin:0 0 3px}
+.tag.type{display:inline-flex}
+.tag{font-size:.68rem;padding:0 8px}
+.body h3{font-size:.95rem;white-space:normal;overflow:visible;line-height:1.35}
+.body p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin:3px 0 0;font-size:.8rem;line-height:1.5}
+.card>.acts{align-self:center}
+@media(max-width:620px){#list{grid-template-columns:1fr}.bar .search{flex:1 1 100%}.card>.acts{flex-direction:column;align-self:center}.card>.acts .btn{padding:4px 6px}}
 </style>
 </head>
 <body>
