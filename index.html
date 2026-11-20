@@ -79,6 +79,8 @@ h2.month small{font-weight:500;color:var(--muted);font-size:.78rem}
 #modal .box{background:#fff;border-radius:16px;height:100%;max-width:1120px;margin:0 auto;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 30px 80px -20px rgba(0,0,0,.5)}
 #modal .hd{display:flex;justify-content:space-between;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);gap:10px}
 #modal iframe{flex:1;border:0;width:100%;background:var(--g100)}
+.ov{position:fixed;inset:0;background:rgba(15,23,42,.55);backdrop-filter:blur(4px);z-index:30;display:none;align-items:center;justify-content:center;padding:14px}
+.box2{background:#fff;border-radius:16px;padding:22px;width:100%;max-width:520px;max-height:92vh;overflow:auto;box-shadow:0 30px 80px -20px rgba(0,0,0,.5)}
 #pdfv{flex:1;overflow:auto;-webkit-overflow-scrolling:touch;background:#e8eaf1;padding:14px}
 #pdfv .pg{width:100%;max-width:980px;margin:0 auto 14px;background:#fff;box-shadow:0 2px 12px rgba(15,23,42,.14);border-radius:4px;overflow:hidden}
 #pdfv canvas{display:block;width:100%;height:auto}
@@ -112,6 +114,7 @@ footer{text-align:center;color:var(--muted);font-size:.78rem;padding:44px 0 36px
     <div class="search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" placeholder="搜尋標題或標籤…" oninput="render()"></div>
     <div class="chips" id="colChips"></div>
     <div class="chips" id="yearChips"></div>
+    <div class="chips" id="themeChips"></div>
     <div class="stat" id="stat"></div>
   </div>
   <div id="list"></div>
@@ -125,6 +128,7 @@ footer{text-align:center;color:var(--muted);font-size:.78rem;padding:44px 0 36px
     <input type="file" id="fFile" multiple style="display:none" onchange="addFiles(this.files)" accept=".ppt,.pptx,.pdf,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.ms-powerpoint,application/pdf">
     <div id="queue" style="margin-top:10px"></div>
     <label style="display:flex;gap:8px;align-items:center;font-weight:400;margin-top:12px"><input type="checkbox" id="autoUp" checked style="width:auto"> 檔名含日期時，選好檔案後自動上傳</label>
+    <label style="display:flex;gap:8px;align-items:center;font-weight:400;margin-top:8px"><input type="checkbox" id="useAI" checked style="width:auto" onchange="localStorage.setItem('aiOn',this.checked?'1':'0')"> 用 AI 輔助判讀分類、主題與摘要（需先設定 Gemini 金鑰）</label>
     <div class="acts" style="margin-top:12px"><button class="btn" id="upBtn" onclick="uploadAll()">⬆ 上傳到網站</button></div>
     <div id="upStat" class="stat" style="font-size:.88rem;margin-top:10px"></div>
   </div>
@@ -132,6 +136,14 @@ footer{text-align:center;color:var(--muted);font-size:.78rem;padding:44px 0 36px
   <div class="panel"><b>類別管理</b><div id="colList" style="margin:8px 0"></div><div class="acts"><button class="btn g" onclick="newCol()">＋ 新增類別</button><button class="btn r" onclick="logout()">登出管理</button></div></div>
 </div>
 
+<div id="editM" class="ov" style="display:none"><div class="box2">
+  <b style="font-size:1.02rem">編輯資料</b>
+  <label>標題</label><input id="eTitle">
+  <div class="row"><div><label>日期</label><input type="date" id="eDate"></div><div><label>類別</label><select id="eCol"></select></div></div>
+  <label>主題（用逗號分隔）</label><input id="eTags" placeholder="情緒覺察, 親師合作">
+  <label>摘要</label><textarea id="eSum" rows="3"></textarea>
+  <div class="acts" style="margin-top:16px"><button class="btn" onclick="saveEdit()">儲存</button><button class="btn g" onclick="$('editM').style.display='none'">取消</button></div>
+</div></div>
 <div id="modal"><div class="box">
   <div class="hd"><div style="min-width:0"><b id="mTitle" style="font-size:.95rem;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></b><span id="mPages" style="font-size:.76rem;color:var(--muted)"></span></div><div class="acts" style="margin:0;flex-shrink:0"><a class="btn o" id="mOpen" target="_blank" rel="noopener" style="display:none">新分頁開啟</a><a class="btn o" id="mDl" download>下載</a><button class="btn g" onclick="closeM()">關閉</button></div></div>
   <iframe id="mFrame" allowfullscreen></iframe>
@@ -142,11 +154,12 @@ footer{text-align:center;color:var(--muted);font-size:.78rem;padding:44px 0 36px
 
 <script>
 const FALLBACK={siteTitle:"會議資料庫",siteSubtitle:"尚未載入資料",collections:[{id:"sel",name:"SEL 週會",color:"#4f46e5"}],items:[]};
-let DB=FALLBACK, colF="all", yearF="all";
+let DB=FALLBACK, colF="all", yearF="all", themeF="all";
 const $=id=>document.getElementById(id);
 const IC={eye:'<svg class="i" viewBox="0 0 24 24"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>',
 dl:'<svg class="i" viewBox="0 0 24 24"><path d="M12 4v12M7 11l5 5 5-5"/><path d="M4 20h16"/></svg>',
 trash:'<svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6"/><path d="M6 7l1 12a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-12M9 7V4h6v3"/></svg>',
+edit:'<svg class="i" viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16v4z"/><path d="M13.5 6.5l4 4"/></svg>',
 mic:'<svg class="i" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg>'};
 const colOf=id=>DB.collections.find(c=>c.id===id)||{name:id,color:"#9ca3af"};
 const esc=s=>String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]));
@@ -157,7 +170,7 @@ async function load(){
   $("siteTitle").textContent=DB.siteTitle;$("siteSub").textContent=DB.siteSubtitle||"";document.title=DB.siteTitle;
   fillCols();render();renderAdmin();
   // 預設日期：最近的週一
-  setupDrop();
+  setupDrop();$("useAI").checked=localStorage.getItem("aiOn")!=="0";
 }
 function fillCols(){renderQueue()}
 async function show(v){
@@ -167,7 +180,11 @@ function render(){
   const years=[...new Set(DB.items.map(i=>i.date.slice(0,4)))].sort().reverse();
   $("colChips").innerHTML=[["all","全部"],...DB.collections.map(c=>[c.id,c.name])].map(([id,n])=>`<span class="chip ${colF==id?"on":""}" onclick="colF='${id}';render()">${id!="all"?`<i class="dot" style="background:${colOf(id).color}"></i>`:""}${esc(n)}</span>`).join("")+`<span class="chip" style="border-style:dashed;color:var(--pri)" onclick="newCol()">＋ 新增類別</span>`+(colF!="all"&&DB.collections.some(c=>c.id==colF)?`<span class="chip" style="color:var(--g600)" onclick="renameCol('${colF}')">✎ 改名「${esc(colOf(colF).name)}」</span><span class="chip" style="color:var(--err);border-color:var(--err)" onclick="delCol('${colF}')">🗑 刪除此類別</span>`:"");
   $("yearChips").innerHTML=[["all","所有年度"],...years.map(y=>[y,y+" 年"])].map(([id,n])=>`<span class="chip ${yearF==id?"on":""}" onclick="yearF='${id}';render()">${n}</span>`).join("");
-  const items=DB.items.filter(i=>(colF=="all"||i.collection==colF)&&(yearF=="all"||i.date.startsWith(yearF))&&(!q||[i.title,i.summary,(i.tags||[]).join(" ")].join(" ").toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date));
+  {const tc={};DB.items.forEach(i=>(i.tags||[]).forEach(t=>tc[t]=(tc[t]||0)+1));
+   if(themeF!="all"&&!tc[themeF])themeF="all";
+   const ts=Object.entries(tc).sort((a,b)=>b[1]-a[1]||a[0].localeCompare(b[0]));
+   $("themeChips").innerHTML=ts.length?`<span class="chip" style="background:transparent;color:var(--muted);border-color:transparent;cursor:default;padding-left:2px">主題</span>`+[["all","全部"],...ts.map(([t,n])=>[t,t+" "+n])].map(([id,n])=>`<span class="chip ${themeF==id?"on":""}" data-t="${esc(id)}" onclick="setTheme(this.dataset.t)">${esc(n)}</span>`).join(""):"";}
+  const items=DB.items.filter(i=>(colF=="all"||i.collection==colF)&&(yearF=="all"||i.date.startsWith(yearF))&&(themeF=="all"||(i.tags||[]).includes(themeF))&&(!q||[i.title,i.summary,(i.tags||[]).join(" ")].join(" ").toLowerCase().includes(q))).sort((a,b)=>b.date.localeCompare(a.date));
   $("stat").textContent=`顯示 ${items.length} 筆`;weeklyNotice();
   {const yr=String(new Date().getFullYear()),last=DB.items.map(i=>i.date).sort().pop();
    $("hstats").innerHTML=`<div><b>${DB.items.length}</b><span>資料總數</span></div><div><b>${DB.items.filter(i=>i.date.startsWith(yr)).length}</b><span>${yr} 年度</span></div><div><b>${last?last.slice(5).replace("-","/"):"—"}</b><span>最近一次</span></div>`}
@@ -178,13 +195,14 @@ function render(){
     const m=i.date.slice(0,7);if(m!==cur){cur=m;h+=`<h2 class="month">${m.slice(0,4)} 年 ${+m.slice(5)} 月 <small>${cnt[m]} 筆</small></h2>`;}
     const c=colOf(i.collection),dt=new Date(i.date+"T00:00:00"),wd="日一二三四五六"[dt.getDay()],age=(Date.now()-dt)/864e5,ext=((i.file||"").split(".").pop()||"").toUpperCase();
     h+=`<article class="card"><div class="date"><span class="mo">${+i.date.slice(5,7)} 月</span><b>${+i.date.slice(8)}</b><span class="wd">週${wd}</span></div><div class="body">
-      <div class="meta"><span class="tag col" style="background:${c.color}1f;color:${c.color}"><i class="dot"></i>${esc(c.name)}</span><span class="tag type">${esc(ext)}</span>${i.pages?`<span class="tag type">${i.pages} 頁</span>`:""}${age>=0&&age<=7?'<span class="tag new">NEW</span>':""}${(i.tags||[]).map(t=>`<span class="tag">#${esc(t)}</span>`).join("")}</div>
+      <div class="meta"><span class="tag col" style="background:${c.color}1f;color:${c.color}"><i class="dot"></i>${esc(c.name)}</span><span class="tag type">${esc(ext)}</span>${i.pages?`<span class="tag type">${i.pages} 頁</span>`:""}${age>=0&&age<=7?'<span class="tag new">NEW</span>':""}${(i.tags||[]).map(t=>`<span class="tag" style="cursor:pointer" data-t="${esc(t)}" onclick="setTheme(this.dataset.t)">#${esc(t)}</span>`).join("")}</div>
       <h3>${esc(i.title)}</h3>
       ${i.summary?`<p>${esc(i.summary)}</p>`:""}
-      <div class="acts"><button class="btn" onclick="preview('${esc(i.id)}')">${IC.eye}線上預覽</button><a class="btn o" href="${esc(i.file)}" download>${IC.dl}下載</a>${i.audio?`<a class="btn g" href="${esc(i.audio)}" target="_blank" rel="noopener">${IC.mic}錄音</a>`:""}<span class="sp"></span><button class="btn ghost" title="刪除" onclick="delItem('${esc(i.id)}')">${IC.trash}</button></div></div></article>`;
+      <div class="acts"><button class="btn" onclick="preview('${esc(i.id)}')">${IC.eye}線上預覽</button><a class="btn o" href="${esc(i.file)}" download>${IC.dl}下載</a>${i.audio?`<a class="btn g" href="${esc(i.audio)}" target="_blank" rel="noopener">${IC.mic}錄音</a>`:""}<span class="sp"></span><button class="btn ghost" title="編輯" onclick="editItem('${esc(i.id)}')">${IC.edit}</button><button class="btn ghost" title="刪除" onclick="delItem('${esc(i.id)}')">${IC.trash}</button></div></div></article>`;
   }
   $("list").innerHTML=h;
 }
+function setTheme(t){themeF=t;render()}
 function absUrl(p){return new URL(p,location.href).href}
 let pdfP=null,pdfTok=0;
 function loadPdfJs(){
@@ -249,7 +267,14 @@ async function login(){
 function logout(){localStorage.removeItem("adminPw");show("browse")}
 let Q=[];
 const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
-const TAGWORDS=["情緒覺察","同理心","自我覺察","自我管理","社會覺察","人際關係","負責任的決定","班級經營","親師溝通","家長","衝突","霸凌","正向管教","正念","情緒調節","傾聽","合作","韌性","校園安全","特教","輔導","評量","雙語","數位","生成式AI","冰山","溝通","尊重","感恩","目標設定","壓力","專注"];
+const THEMES={"情緒覺察":["情緒覺察","覺察","情緒詞彙","情緒溫度","情緒辨識","情緒訊號","預警"],"情緒調節":["情緒調節","情緒平復","平復","冷靜","呼吸","正念","轉化機制"],"同理心":["同理","換位思考","傾聽","共感"],"人際溝通":["溝通","表達","對話","回應","提問"],"衝突處理":["衝突","爭執","調解","和解","共識"],"親師合作":["家長","親師","家庭","親職"],"班級經營":["班級經營","班規","常規","教室管理","班級氣氛","教室"],"正向管教":["正向管教","正向行為","紀律","行為輔導","行為問題","增強"],"霸凌與校園安全":["霸凌","校園安全","暴力"],"自我管理":["自我管理","自律","目標設定","專注","時間管理"],"自我覺察":["自我覺察","優勢","價值觀","自我認同"],"社會覺察":["社會覺察","多元","尊重","包容"],"負責任的決定":["負責任","決策","後果"],"韌性與壓力":["韌性","壓力","挫折","抗壓","復原","潰堤"],"高敏感與特殊需求":["高敏感","特教","特殊需求","過動","自閉"],"教師增能":["教師","備課","教學策略","增能","專業成長","鷹架"],"學校領導":["校長","學校領導","願景","行政","校務","生態系"],"微時刻":["微時刻","micro-moment","日常互動"],"冰山模型":["冰山","水面下","深層需求","水面之下"],"AI與數位":["生成式ai","chatgpt","數位","科技"]};
+function pickThemes(text,min=2){
+  const t=(text||"").toLowerCase(),sc=[];
+  for(const [k,list] of Object.entries(THEMES)){let s=0;for(const w of list){const ww=w.toLowerCase();let i=-1,c=0;while((i=t.indexOf(ww,i+1))>=0&&c<20)c++;s+=c}if(s>=min)sc.push([k,s])}
+  sc.sort((a,b)=>b[1]-a[1]);
+  if(!sc.length&&min>1)return pickThemes(text,1).slice(0,2);
+  return sc.slice(0,4).map(x=>x[0]);
+}
 const SYN={"行政":["校務會議","行政會報","行政會議","處室","主任","報告事項","提案討論"],"研習":["研習","工作坊","講座","培訓","增能","分享會"],"課程":["課程","教學活動","教案","單元"],"SEL":["SEL","社會情緒","情緒學習"],"家長":["家長","親職","親師"]};
 function okDate(y,m,d){const dt=new Date(y,m-1,d);return m>=1&&m<=12&&d>=1&&d<=31&&dt.getMonth()==m-1&&Math.abs(dt-Date.now())<2*365*864e5?`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`:""}
 function findDate(s){
@@ -279,11 +304,6 @@ function detectCol(name,text){
   if(best)return best;
   const last=localStorage.getItem("lastCol");
   return DB.collections.some(c=>c.id===last)?last:DB.collections[0].id;
-}
-function pickTags(text,min=2){
-  const sc=[];
-  for(const w of TAGWORDS){let c=0,i=-1;const t=w;while((i=text.indexOf(t,i+1))>=0&&c<30)c++;if(c>=min)sc.push([w,c])}
-  return sc.sort((a,b)=>b[1]-a[1]).slice(0,4).map(x=>x[0]);
 }
 let tessW=null;
 async function getOcr(){
@@ -346,21 +366,39 @@ async function extractInfo(f){
   const seen=new Set([r.title]),sm=[];
   for(const t of titles.slice(1)){const c=clean(t);if(c.length>=2&&c.length<=40&&!seen.has(c)){seen.add(c);sm.push(c)}if(sm.length>=4)break}
   r.summary=sm.join(" ・ ").slice(0,120);
-  r.tags=r.ocr?pickTags(r.text,1).slice(0,3):pickTags(r.text);
+  r.tags=pickThemes(r.title+" "+r.text,2);
   return r;
 }
+async function aiClassify(payload){
+  const r=await fetch(GAS_URL,{method:"POST",headers:{"Content-Type":"text/plain"},body:JSON.stringify({pw:PW(),action:"classify",...payload})});
+  const j=await r.json();
+  if(j.status!==200)throw new Error(j.status==403||j.status==412?"尚未設定 AI（需更新 Apps Script 並設定 GEMINI_KEY）":(j.body&&j.body.message)||("狀態 "+j.status));
+  return j.body;
+}
 async function addFiles(list){
-  const bad=[],arr=[...list];
+  const bad=[],arr=[...list];let aiErr="";
   $("fFile").value="";st("辨識檔案內容中…");
+  if($("useAI").checked&&!PW())await login();
   for(const f of arr){
     if(!/\.(pptx?|pdf)$/i.test(f.name)){bad.push(f.name);continue}
-    const fname=f.name.replace(/\.[^.]+$/,""),info=await extractInfo(f),dt=detectDate(fname,f,info);
-    const title=info.title||fname,col=detectCol(fname,title+" "+info.text);
+    const fname=f.name.replace(/\.[^.]+$/,""),info=await extractInfo(f);
+    let dt=detectDate(fname,f,info),title=info.title||fname,col=detectCol(fname,title+" "+info.text),summary=info.summary,tags=info.tags,usedAI=false;
+    if($("useAI").checked&&PW()&&!aiErr&&info.text.length>=30){
+      try{
+        st("AI 判讀中："+f.name);
+        const ai=await aiClassify({name:fname,text:info.text,categories:DB.collections.map(c=>c.name),themes:Object.keys(THEMES)});
+        const c=DB.collections.find(x=>x.name===ai.category);if(c)col=c.id;
+        if(ai.summary&&ai.summary.length>=10)summary=String(ai.summary).slice(0,140);
+        if(Array.isArray(ai.themes)&&ai.themes.length)tags=[...new Set(ai.themes.map(s=>String(s).trim()).filter(Boolean))].slice(0,4);
+        const ad=findDate(ai.date||"");if(!dt.sure&&ad)dt={d:ad,sure:true,note:"",src:"AI"};
+        usedAI=true;
+      }catch(e){aiErr=e.message}
+    }
     const dup=DB.items.find(i=>(i.size&&i.size===f.size&&i.pages===info.pages)||(i.title===title&&i.date===dt.d));
-    const found=[info.ocr?"文字辨識(OCR)":"",info.title?"標題":"",dt.sure&&dt.src!="檔名"?"日期":"",info.summary?"摘要":"",info.tags.length?"標籤":""].filter(Boolean);
-    Q.push({f,title,date:dt.d,sure:dt.sure,dateNote:dt.note,col,summary:info.summary,tags:info.tags,pages:info.pages,dup,found:found.length?"已自動辨識："+found.join("、"):"",status:""});
+    const found=[usedAI?"AI 判讀":"",info.ocr?"文字辨識(OCR)":"",info.title?"標題":"",dt.sure&&dt.src!="檔名"?"日期":"",summary?"摘要":"",tags.length?"主題":""].filter(Boolean);
+    Q.push({f,title,date:dt.d,sure:dt.sure,dateNote:dt.note,col,summary,tags,pages:info.pages,dup,found:found.length?"已自動辨識："+found.join("、"):"",status:""});
   }
-  st("");
+  st(aiErr?"AI 判讀未啟用："+aiErr+"（已改用規則式辨識）":"","var(--warn)");
   if(bad.length)alert("不支援的檔案（只收 PPT／PDF）：\n"+bad.join("\n"));
   renderQueue();
   if($("autoUp").checked&&Q.length&&Q.every(q=>q.sure&&!q.dup))uploadAll();
@@ -465,6 +503,28 @@ async function delCol(id){
     DB=db;if(colF==id)colF="all";fillCols();render();renderAdmin();
   }catch(e){alert("失敗："+e.message)}
 }
+let editId=null;
+async function editItem(id){
+  const it=DB.items.find(x=>x.id===id);if(!it)return;
+  if(!PW()&&!(await login()))return;
+  editId=id;$("eTitle").value=it.title||"";$("eDate").value=it.date;$("eTags").value=(it.tags||[]).join(", ");$("eSum").value=it.summary||"";
+  $("eCol").innerHTML=DB.collections.map(c=>`<option value="${esc(c.id)}" ${c.id==it.collection?"selected":""}>${esc(c.name)}</option>`).join("");
+  $("editM").style.display="flex";
+}
+async function saveEdit(){
+  const title=$("eTitle").value.trim(),date=$("eDate").value;if(!title||!date){alert("標題與日期不可空白");return}
+  try{
+    const jr=await (await gh("contents/data/index.json?t="+Date.now())).json();
+    const db=JSON.parse(decodeURIComponent(escape(atob(jr.content.replace(/\n/g,"")))));
+    const t=db.items.find(x=>x.id===editId);if(!t)throw new Error("找不到這筆資料");
+    t.title=title;t.date=date;t.collection=$("eCol").value;
+    const tags=$("eTags").value.split(/[,，、]/).map(s=>s.trim()).filter(Boolean),sm=$("eSum").value.trim();
+    if(tags.length)t.tags=tags;else delete t.tags;
+    if(sm)t.summary=sm;else delete t.summary;
+    await gh("contents/data/index.json",{method:"PUT",body:JSON.stringify({message:"edit "+editId,sha:jr.sha,content:btoa(unescape(encodeURIComponent(JSON.stringify(db,null,2))))})});
+    DB=db;fillCols();render();renderAdmin();$("editM").style.display="none";
+  }catch(e){alert("失敗："+e.message)}
+}
 async function delItem(id){
   const it=DB.items.find(x=>x.id===id);if(!it)return;
   if(!confirm("刪除「"+it.title+"」？\n資料與 PPT 檔案都會刪除，無法復原。"))return;
@@ -488,7 +548,7 @@ async function delItem(id){
 function renderAdmin(){
   $("cnt").textContent=DB.items.length;
   $("colList").innerHTML=DB.collections.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--g100);font-size:.9rem"><span><span class="tag col" style="background:${c.color}1f;color:${c.color}"><i class="dot"></i>${esc(c.name)}</span></span><span style="display:flex;gap:6px"><button class="btn o" onclick="renameCol('${esc(c.id)}')">改名</button><button class="btn r" onclick="delCol('${esc(c.id)}')">刪除</button></span></div>`).join("");
-  $("adminList").innerHTML=[...DB.items].sort((a,b)=>b.date.localeCompare(a.date)).map(i=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--g100);font-size:.88rem"><span>${i.date}　${esc(i.title)}</span><span style="display:flex;gap:6px;flex-shrink:0"><button class="btn o" onclick="preview('${esc(i.id)}')">${IC.eye}預覽</button><button class="btn r" onclick="delItem('${esc(i.id)}')">${IC.trash}刪除</button></span></div>`).join("")||"（空）";
+  $("adminList").innerHTML=[...DB.items].sort((a,b)=>b.date.localeCompare(a.date)).map(i=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:6px 0;border-bottom:1px solid var(--g100);font-size:.88rem"><span>${i.date}　${esc(i.title)}</span><span style="display:flex;gap:6px;flex-shrink:0"><button class="btn g" onclick="editItem('${esc(i.id)}')">${IC.edit}編輯</button><button class="btn o" onclick="preview('${esc(i.id)}')">${IC.eye}預覽</button><button class="btn r" onclick="delItem('${esc(i.id)}')">${IC.trash}刪除</button></span></div>`).join("")||"（空）";
 }
 document.addEventListener("keydown",e=>{if(e.key=="Escape")closeM()});
 function lastMonday(){
