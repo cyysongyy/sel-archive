@@ -34,49 +34,93 @@
       "date": "2026-11-16",
       "collection": "sel",
       "title": "Beneath_the_Surface",
-      "file": "files/2026-11-16-sel-roe.pdf"
+      "file": "files/2026-11-16-sel-roe.pdf",
+      "pages": 11,
+      "size": 12975283,
+      "summary": "現狀: 糾結的表象與真實的挑戰 ・ 早期預警儀表板: 捕捉情緒的微小偏移 ・ SEL 雙引擎生態系比由學校與家庭 4 協同作戰",
+      "tags": [
+        "社會覺察",
+        "情緒調節"
+      ]
     },
     {
       "id": "2026-11-02-sel",
       "date": "2026-11-02",
       "collection": "sel",
       "title": "SEL_提問導航羅盤",
-      "file": "files/2026-11-02-sel.pdf"
+      "file": "files/2026-11-02-sel.pdf",
+      "pages": 9,
+      "size": 11042298,
+      "summary": "日常問答 SEL 認知導航 ・ 第一維度: 重問"
     },
     {
       "id": "2026-11-02-sel-0ew",
       "date": "2026-11-02",
       "collection": "sel",
       "title": "兒童衝突溝通指南",
-      "file": "files/2026-11-02-sel-ka6.pdf"
+      "file": "files/2026-11-02-sel-ka6.pdf",
+      "pages": 12,
+      "size": 12364658,
+      "summary": "兒童的溝通迷思:「是不是講話大聲, 就一定會贏?1 ・ 衝突中的兩種光譜: 我們在面對什麼樣的學生? ・ 暢行為改變的鷹架: 交棒過程 (1do - We do - You do)",
+      "tags": [
+        "溝通",
+        "衝突"
+      ]
     },
     {
       "id": "2026-11-02-sel-gpd",
       "date": "2026-11-02",
       "collection": "sel",
       "title": "教室_SEL_實戰指南",
-      "file": "files/2026-11-02-sel-528.pdf"
+      "file": "files/2026-11-02-sel-528.pdf",
+      "pages": 14,
+      "size": 16044189,
+      "tags": [
+        "衝突",
+        "韌性"
+      ]
     },
     {
       "id": "2026-11-16-sel",
       "date": "2026-11-16",
       "collection": "sel",
       "title": "Navigating Inner Emotions",
-      "file": "files/2026-11-16-sel-jk7.pdf"
+      "file": "files/2026-11-16-sel-jk7.pdf",
+      "pages": 11,
+      "size": 13452206,
+      "summary": "為什麼我們必須離開安逸的教室? ・ 實境壓力測試的三個關鍵節點 ・ 節點一 | 當多重環境失控, 情緒如何潰堤?",
+      "tags": [
+        "壓力",
+        "溝通"
+      ]
     },
     {
       "id": "2026-10-12-sel",
       "date": "2026-10-12",
       "collection": "sel",
       "title": "由內而外的教育實踐指南",
-      "file": "files/2026-10-12-sel.pdf"
+      "file": "files/2026-10-12-sel.pdf",
+      "pages": 9,
+      "size": 10276176,
+      "summary": "由內而外的教育實踐路徑 ・ 10 月的焦躁與解藥: 建立專屬的「轉化機制」 ・ 看見水面下的驅力: 重構高敏感學生的行為密碼",
+      "tags": [
+        "自我覺察",
+        "班級經營",
+        "冰山"
+      ]
     },
     {
       "id": "2026-09-21-sel",
       "date": "2026-09-21",
       "collection": "sel",
       "title": "SEL_Micro-Moment_Playbook",
-      "file": "files/2026-09-21-sel.pdf"
+      "file": "files/2026-09-21-sel.pdf",
+      "pages": 13,
+      "size": 18029657,
+      "summary": "破除迷思: 紀律與 SEL 的真實關係 ・ 重新定義日常: 看見「微時刻 (Micro-moments)」 ・ 案例解構 01: 從『「慣性遲到」看見親師生系統",
+      "tags": [
+        "家長"
+      ]
     }
   ]
 }
